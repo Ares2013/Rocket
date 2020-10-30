@@ -39,8 +39,8 @@ fn get_hello(name: String, age: u8) -> Json<String> {
 // use `contrib::Json` to automatically serialize a type into JSON.
 #[post("/<age>", format = "plain", data = "<name_data>")]
 async fn post_hello(age: u8, name_data: Data) -> Result<Json<String>, Debug<io::Error>> {
-    let name = name_data.open(64.bytes()).stream_to_string().await?;
-    let person = Person { name, age };
+    let name = name_data.open(64.bytes()).into_string().await?;
+    let person = Person { name: name.into_inner(), age };
     // NOTE: In a real application, we'd use `rocket_contrib::json::Json`.
     Ok(Json(serde_json::to_string(&person).expect("valid JSON")))
 }

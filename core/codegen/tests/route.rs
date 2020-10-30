@@ -7,61 +7,71 @@
 
 use std::path::PathBuf;
 
+use rocket::request::Request;
 use rocket::http::ext::Normalize;
 use rocket::local::blocking::Client;
-use rocket::data::{self, Data, FromData, ToByteUnit};
-use rocket::request::{Request, Form};
+use rocket::data::{self, Data, FromData};
 use rocket::http::{Status, RawStr, ContentType};
 
 // Use all of the code generation available at once.
 
 #[derive(FromForm, UriDisplayQuery)]
 struct Inner<'r> {
-    field: &'r RawStr
+    field: &'r str
 }
 
 struct Simple(String);
 
 #[async_trait]
-impl FromData for Simple {
-    type Error = ();
+impl<'r> FromData<'r> for Simple {
+    type Error = std::io::Error;
 
-    async fn from_data(_: &Request<'_>, data: Data) -> data::Outcome<Self, ()> {
-        let string = data.open(64.bytes()).stream_to_string().await.unwrap();
-        data::Outcome::Success(Simple(string))
+    async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, Self::Error> {
+        String::from_data(req, data).await.map(Simple)
     }
 }
 
-#[post("/<a>/<name>/name/<path..>?sky=blue&<sky>&<query..>", format = "json", data = "<simple>", rank = 138)]
+#[post(
+    "/<a>/<name>/name/<path..>?sky=blue&<sky>&<query..>",
+    format = "json",
+    data = "<simple>",
+    rank = 138
+)]
 fn post1(
     sky: usize,
-    name: &RawStr,
+    name: &str,
     a: String,
-    query: Form<Inner<'_>>,
+    query: Inner<'_>,
     path: PathBuf,
     simple: Simple,
 ) -> String {
     let string = format!("{}, {}, {}, {}, {}, {}",
         sky, name, a, query.field, path.normalized_str(), simple.0);
 
-    let uri = uri!(post2: a, name.url_decode_lossy(), path, sky, query.into_inner());
+    let uri = uri!(post1: a, name, path, sky, query);
 
     format!("({}) ({})", string, uri.to_string())
 }
 
-#[route(POST, path = "/<a>/<name>/name/<path..>?sky=blue&<sky>&<query..>", format = "json", data = "<simple>", rank = 138)]
+#[route(
+    POST,
+    path = "/<a>/<name>/name/<path..>?sky=blue&<sky>&<query..>",
+    format = "json",
+    data = "<simple>",
+    rank = 138
+)]
 fn post2(
     sky: usize,
-    name: &RawStr,
+    name: &str,
     a: String,
-    query: Form<Inner<'_>>,
+    query: Inner<'_>,
     path: PathBuf,
     simple: Simple,
 ) -> String {
     let string = format!("{}, {}, {}, {}, {}, {}",
         sky, name, a, query.field, path.normalized_str(), simple.0);
 
-    let uri = uri!(post2: a, name.url_decode_lossy(), path, sky, query.into_inner());
+    let uri = uri!(post2: a, name, path, sky, query);
 
     format!("({}) ({})", string, uri.to_string())
 }
@@ -79,8 +89,8 @@ fn test_full_route() {
 
     let client = Client::tracked(rocket).unwrap();
 
-    let a = "A%20A";
-    let name = "Bob%20McDonald";
+    let a = RawStr::new("A%20A");
+    let name = RawStr::new("Bob%20McDonald");
     let path = "this/path/here";
     let sky = 777;
     let query = "field=inside";
@@ -104,7 +114,7 @@ fn test_full_route() {
         .dispatch();
 
     assert_eq!(response.into_string().unwrap(), format!("({}, {}, {}, {}, {}, {}) ({})",
-            sky, name, "A A", "inside", path, simple, expected_uri));
+            sky, name.percent_decode().unwrap(), "A A", "inside", path, simple, expected_uri));
 
     let response = client.post(format!("/2{}", uri)).body(simple).dispatch();
     assert_eq!(response.status(), Status::NotFound);
@@ -116,7 +126,7 @@ fn test_full_route() {
         .dispatch();
 
     assert_eq!(response.into_string().unwrap(), format!("({}, {}, {}, {}, {}, {}) ({})",
-            sky, name, "A A", "inside", path, simple, expected_uri));
+            sky, name.percent_decode().unwrap(), "A A", "inside", path, simple, expected_uri));
 }
 
 mod scopes {

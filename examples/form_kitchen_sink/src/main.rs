@@ -16,10 +16,10 @@ enum FormOption {
 struct FormInput<'r> {
     checkbox: bool,
     number: usize,
-    #[form(field = "type")]
+    #[field(name = "type")]
     radio: FormOption,
     password: &'r RawStr,
-    #[form(field = "textarea")]
+    #[field(name = "textarea")]
     text_area: String,
     select: FormOption,
 }

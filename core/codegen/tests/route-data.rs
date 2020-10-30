@@ -1,34 +1,31 @@
-#[macro_use] extern crate rocket;
+#[macro_use]extern crate rocket;
 
 use rocket::{Request, Data};
 use rocket::local::blocking::Client;
-use rocket::request::Form;
-use rocket::data::{self, FromData, ToByteUnit};
-use rocket::http::{RawStr, ContentType, Status};
+use rocket::data::{self, FromData};
+use rocket::http::ContentType;
+use rocket::form::Form;
 
 // Test that the data parameters works as expected.
 
 #[derive(FromForm)]
-struct Inner<'r> {
-    field: &'r RawStr
+struct Inner {
+    field: String
 }
 
 struct Simple(String);
 
 #[async_trait]
-impl FromData for Simple {
-    type Error = ();
+impl<'r> FromData<'r> for Simple {
+    type Error = std::io::Error;
 
-    async fn from_data(_: &Request<'_>, data: Data) -> data::Outcome<Self, ()> {
-        match data.open(64.bytes()).stream_to_string().await {
-            Ok(string) => data::Outcome::Success(Simple(string)),
-            Err(_) => data::Outcome::Failure((Status::InternalServerError, ())),
-        }
+    async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, Self::Error> {
+        String::from_data(req, data).await.map(Simple)
     }
 }
 
 #[post("/f", data = "<form>")]
-fn form(form: Form<Inner<'_>>) -> String { form.field.url_decode_lossy() }
+fn form(form: Form<Inner>) -> String { form.into_inner().field }
 
 #[post("/s", data = "<simple>")]
 fn simple(simple: Simple) -> String { simple.0 }

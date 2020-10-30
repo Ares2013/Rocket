@@ -14,32 +14,21 @@ error[E0277]: the trait bound `Q: FromSegments<'_>` is not satisfied
   |
   = note: required by `from_segments`
 
-error[E0277]: the trait bound `Q: FromFormValue<'_>` is not satisfied
+error[E0277]: the trait bound `Q: FromFormField<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:12:12
    |
 12 | fn f2(foo: Q) {}
-   |            ^ the trait `FromFormValue<'_>` is not implemented for `Q`
+   |            ^ the trait `FromFormField<'_>` is not implemented for `Q`
    |
-   = note: required by `from_form_value`
+   = note: required because of the requirements on the impl of `FromForm<'_>` for `Q`
 
-error[E0277]: the trait bound `Q: FromFormValue<'_>` is not satisfied
-   --> $DIR/route-type-errors.rs:12:7
-    |
-12  | fn f2(foo: Q) {}
-    |       ^^^^^^ the trait `FromFormValue<'_>` is not implemented for `Q`
-    |
-   ::: $WORKSPACE/core/lib/src/request/form/from_form_value.rs
-    |
-    | pub trait FromFormValue<'v>: Sized {
-    | ---------------------------------- required by this bound in `FromFormValue`
-
-error[E0277]: the trait bound `Q: FromQuery<'_>` is not satisfied
+error[E0277]: the trait bound `Q: FromFormField<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:15:12
    |
 15 | fn f3(foo: Q) {}
-   |            ^ the trait `FromQuery<'_>` is not implemented for `Q`
+   |            ^ the trait `FromFormField<'_>` is not implemented for `Q`
    |
-   = note: required by `from_query`
+   = note: required because of the requirements on the impl of `FromForm<'_>` for `Q`
 
 error[E0277]: the trait bound `Q: FromData` is not satisfied
   --> $DIR/route-type-errors.rs:18:12

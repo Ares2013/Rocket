@@ -167,7 +167,7 @@ use crate::uri::{self, UriPart, UriDisplay};
 /// # #[macro_use] extern crate rocket;
 /// # use std::fmt;
 /// use rocket::http::RawStr;
-/// use rocket::request::Form;
+/// use rocket::form::Form;
 /// # use rocket::http::uri::{Formatter, UriDisplay, FromUriParam, Query};
 /// #
 /// # #[derive(FromForm)]

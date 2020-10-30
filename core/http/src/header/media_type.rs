@@ -7,7 +7,7 @@ use either::Either;
 
 use crate::ext::IntoCollection;
 use crate::uncased::UncasedStr;
-use crate::parse::{Indexed, IndexedString, parse_media_type};
+use crate::parse::{Indexed, IndexedStr, parse_media_type};
 
 use smallvec::SmallVec;
 
@@ -54,24 +54,18 @@ pub struct MediaType {
     /// Storage for the entire media type string.
     pub(crate) source: Source,
     /// The top-level type.
-    pub(crate) top: IndexedString,
+    pub(crate) top: IndexedStr<'static>,
     /// The subtype.
-    pub(crate) sub: IndexedString,
+    pub(crate) sub: IndexedStr<'static>,
     /// The parameters, if any.
     pub(crate) params: MediaParams
 }
 
-#[derive(Debug, Clone)]
-struct MediaParam {
-    key: IndexedString,
-    value: IndexedString,
-}
-
-// FIXME: `Static` is needed for `const` items. Need `const SmallVec::new`.
+// FIXME: `Static` variant is needed for `const`. Need `const SmallVec::new`.
 #[derive(Debug, Clone)]
 pub(crate) enum MediaParams {
     Static(&'static [(&'static str, &'static str)]),
-    Dynamic(SmallVec<[(IndexedString, IndexedString); 2]>)
+    Dynamic(SmallVec<[(IndexedStr<'static>, IndexedStr<'static>); 2]>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +73,12 @@ pub(crate) enum Source {
     Known(&'static str),
     Custom(Cow<'static, str>),
     None
+}
+
+impl From<Cow<'static, str>> for Source {
+    fn from(custom: Cow<'static, str>) -> Source {
+        Source::Custom(custom)
+    }
 }
 
 macro_rules! media_types {
@@ -165,6 +165,47 @@ macro_rules! from_extension {
                 $(x if uncased::eq(x, $ext) => Some(MediaType::$name)),*,
                 _ => None
             }
+        }
+    );)
+}
+
+macro_rules! extension {
+    ($($ext:expr => $name:ident,)*) => (
+    docify!([
+        Returns the most common file extension associated with the @[Media-Type]
+        @code{self} if it is known. Otherwise, returns @code{None}. The
+        currently recognized extensions are identical to those in
+        @{"[`MediaType::from_extension()`]"} with the @{"most common"} extension
+        being the first extension appearing in the list for a given
+        @[Media-Type].
+    ];
+        /// # Example
+        ///
+        /// Known extension:
+        ///
+        /// ```rust
+        /// # extern crate rocket;
+        /// use rocket::http::MediaType;
+        ///
+        /// assert_eq!(MediaType::JSON.extension().unwrap(), "json");
+        /// assert_eq!(MediaType::JPEG.extension().unwrap(), "jpeg");
+        /// assert_eq!(MediaType::JPEG.extension().unwrap(), "JPEG");
+        /// assert_eq!(MediaType::PDF.extension().unwrap(), "pdf");
+        /// ```
+        ///
+        /// An unknown extension:
+        ///
+        /// ```rust
+        /// # extern crate rocket;
+        /// use rocket::http::MediaType;
+        ///
+        /// let foo = MediaType::new("foo", "bar");
+        /// assert!(foo.extension().is_none());
+        /// ```
+        #[inline]
+        pub fn extension(&self) -> Option<&UncasedStr> {
+            $(if self == &MediaType::$name { return Some($ext.into()) })*
+            None
         }
     );)
 }
@@ -353,6 +394,14 @@ impl MediaType {
         }
     }
 
+    pub(crate) fn known_source(&self) -> Option<&'static str> {
+        match self.source {
+            Source::Known(string) => Some(string),
+            Source::Custom(Cow::Borrowed(string)) => Some(string),
+            _ => None
+        }
+    }
+
     known_shorthands!(parse_flexible);
 
     known_extensions!(from_extension);
@@ -482,8 +531,9 @@ impl MediaType {
     /// use rocket::http::MediaType;
     ///
     /// let plain = MediaType::Plain;
-    /// let plain_params: Vec<_> = plain.params().collect();
-    /// assert_eq!(plain_params, vec![("charset", "utf-8")]);
+    /// let (key, val) = plain.params().next().unwrap();
+    /// assert_eq!(key, "charset");
+    /// assert_eq!(val, "utf-8");
     /// ```
     ///
     /// The `MediaType::PNG` type has no parameters:
@@ -496,8 +546,8 @@ impl MediaType {
     /// assert_eq!(png.params().count(), 0);
     /// ```
     #[inline]
-    pub fn params<'a>(&'a self) -> impl Iterator<Item=(&'a str, &'a str)> + 'a {
-        match self.params {
+    pub fn params<'a>(&'a self) -> impl Iterator<Item=(&'a UncasedStr, &'a str)> + 'a {
+        let raw = match self.params {
             MediaParams::Static(ref slice) => Either::Left(slice.iter().cloned()),
             MediaParams::Dynamic(ref vec) => {
                 Either::Right(vec.iter().map(move |&(ref key, ref val)| {
@@ -505,8 +555,21 @@ impl MediaType {
                     (key.from_source(source_str), val.from_source(source_str))
                 }))
             }
-        }
+        };
+
+        raw.map(|(k, v)| (k.into(), v))
     }
+
+    /// Returns the first parameter with name `name`, if there is any.
+    #[inline]
+    pub fn param<'a>(&'a self, name: &str) -> Option<&'a str> {
+        self.params()
+            .filter(|(k, _)| *k == name)
+            .map(|(_, v)| v)
+            .next()
+    }
+
+    known_extensions!(extension);
 
     known_media_types!(media_types);
 }
@@ -544,7 +607,7 @@ impl Hash for MediaType {
 impl fmt::Display for MediaType {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Source::Known(src) = self.source {
+        if let Some(src) = self.known_source() {
             src.fmt(f)
         } else {
             write!(f, "{}/{}", self.top(), self.sub())?;
@@ -563,8 +626,10 @@ impl Default for MediaParams {
     }
 }
 
-impl Extend<(IndexedString, IndexedString)> for MediaParams {
-    fn extend<T: IntoIterator<Item = (IndexedString, IndexedString)>>(&mut self, iter: T) {
+impl Extend<(IndexedStr<'static>, IndexedStr<'static>)> for MediaParams {
+    fn extend<T>(&mut self, iter: T)
+        where T: IntoIterator<Item = (IndexedStr<'static>, IndexedStr<'static>)>
+    {
         match self {
             MediaParams::Static(..) => panic!("can't add to static collection!"),
             MediaParams::Dynamic(ref mut v) => v.extend(iter)

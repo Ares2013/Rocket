@@ -1,12 +1,18 @@
-use rocket::request::FromFormValue;
+use rocket::form::{FromFormField, ValueField, FromForm, Options, Errors};
+
+fn parse<'v, T: FromForm<'v>>(value: &'v str) -> Result<T, Errors<'v>> {
+    let mut context = T::init(Options::Lenient);
+    T::push_value(&mut context, ValueField::from_value(value));
+    T::finalize(context)
+}
 
 macro_rules! assert_parse {
     ($($string:expr),* => $item:ident :: $variant:ident) => ($(
-        match $item::from_form_value($string.into()) {
+        match parse::<$item>($string) {
             Ok($item::$variant) => { /* okay */ },
             Ok(item) => panic!("Failed to parse {} as {:?}. Got {:?} instead.",
                                $string, $item::$variant, item),
-            Err(e) => panic!("Failed to parse {} as {}: {:?}",
+            Err(e) => panic!("Failed to parse {} as {}: {}",
                              $string, stringify!($item), e),
 
         }
@@ -15,7 +21,7 @@ macro_rules! assert_parse {
 
 macro_rules! assert_no_parse {
     ($($string:expr),* => $item:ident) => ($(
-        match $item::from_form_value($string.into()) {
+        match parse::<$item>($string) {
             Err(_) => { /* okay */ },
             Ok(item) => panic!("Unexpectedly parsed {} as {:?}", $string, item)
         }
@@ -24,7 +30,7 @@ macro_rules! assert_no_parse {
 
 #[test]
 fn from_form_value_simple() {
-    #[derive(Debug, FromFormValue)]
+    #[derive(Debug, FromFormField)]
     enum Foo { A, B, C, }
 
     assert_parse!("a", "A" => Foo::A);
@@ -35,7 +41,7 @@ fn from_form_value_simple() {
 #[test]
 fn from_form_value_weirder() {
     #[allow(non_camel_case_types)]
-    #[derive(Debug, FromFormValue)]
+    #[derive(Debug, FromFormField)]
     enum Foo { Ab_Cd, OtherA }
 
     assert_parse!("ab_cd", "ab_CD", "Ab_CD" => Foo::Ab_Cd);
@@ -44,7 +50,7 @@ fn from_form_value_weirder() {
 
 #[test]
 fn from_form_value_no_parse() {
-    #[derive(Debug, FromFormValue)]
+    #[derive(Debug, FromFormField)]
     enum Foo { A, B, C, }
 
     assert_no_parse!("abc", "ab", "bc", "ca" => Foo);
@@ -53,11 +59,11 @@ fn from_form_value_no_parse() {
 
 #[test]
 fn from_form_value_renames() {
-    #[derive(Debug, FromFormValue)]
+    #[derive(Debug, FromFormField)]
     enum Foo {
-        #[form(value = "foo")]
+        #[field(value = "foo")]
         Bar,
-        #[form(value = ":book")]
+        #[field(value = ":book")]
         Book
     }
 
@@ -69,7 +75,7 @@ fn from_form_value_renames() {
 #[test]
 fn from_form_value_raw() {
     #[allow(non_camel_case_types)]
-    #[derive(Debug, FromFormValue)]
+    #[derive(Debug, FromFormField)]
     enum Keyword {
         r#type,
         this,
@@ -78,4 +84,22 @@ fn from_form_value_raw() {
     assert_parse!("type", "tYpE" => Keyword::r#type);
     assert_parse!("this" => Keyword::this);
     assert_no_parse!("r#type" => Keyword);
+}
+
+#[test]
+fn form_value_errors() {
+    use rocket::form::error::{ErrorKind, Entity};
+
+    #[derive(Debug, FromFormField)]
+    enum Foo { Bar, Bob }
+
+    let errors = parse::<Foo>("blob").unwrap_err();
+    assert!(errors.iter().any(|e| {
+        && "blob" == &e.value.as_ref().unwrap()
+        && e.entity == Entity::Value
+        && match &e.kind {
+            ErrorKind::InvalidChoice { choices } => &choices[..] == &["Bar", "Bob"],
+            _ => false
+        }
+    }));
 }

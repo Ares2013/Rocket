@@ -532,7 +532,7 @@ As an example, consider the following form structure and route:
 # fn main() {}
 
 use rocket::http::RawStr;
-use rocket::request::Form;
+use rocket::form::Form;
 
 #[derive(FromForm, UriDisplayQuery)]
 struct UserDetails<'r> {
@@ -552,7 +552,7 @@ automatically generated, allowing for URIs to `add_user` to be generated using
 # #[macro_use] extern crate rocket;
 
 # use rocket::http::RawStr;
-# use rocket::request::Form;
+# use rocket::form::Form;
 
 # #[derive(FromForm, UriDisplayQuery)]
 # struct UserDetails<'r> {
@@ -649,7 +649,7 @@ value of type `Option<Form<T>>` is expected:
 # #[macro_use] extern crate rocket;
 
 # use rocket::http::RawStr;
-# use rocket::request::Form;
+# use rocket::form::Form;
 
 # #[derive(FromForm, UriDisplayQuery)]
 # struct UserDetails<'r> { age: Option<usize>, nickname: &'r RawStr, }

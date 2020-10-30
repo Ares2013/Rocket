@@ -104,5 +104,6 @@ macro_rules! known_shorthands {
         "css" => CSS,
         "multipart" => FormData,
         "xml" => XML,
+        "pdf" => PDF,
     })
 }

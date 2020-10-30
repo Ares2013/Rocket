@@ -3,8 +3,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::fmt;
 
-use crate::header::Header;
-use crate::media_type::{MediaType, Source};
+use crate::header::{Header, MediaType};
+use crate::uncased::UncasedStr;
 use crate::ext::IntoCollection;
 
 /// Representation of HTTP Content-Types.
@@ -98,6 +98,47 @@ macro_rules! from_extension {
         #[inline]
         pub fn from_extension(ext: &str) -> Option<ContentType> {
             MediaType::from_extension(ext).map(ContentType)
+        }
+    );)
+}
+
+macro_rules! extension {
+    ($($ext:expr => $name:ident,)*) => (
+    docify!([
+        Returns the most common file extension associated with the
+        @[Content-Type] @code{self} if it is known. Otherwise, returns
+        @code{None}. The currently recognized extensions are identical to those
+        in @{"[`ContentType::from_extension()`]"} with the @{"most common"}
+        extension being the first extension appearing in the list for a given
+        @[Content-Type].
+    ];
+        /// # Example
+        ///
+        /// Known extension:
+        ///
+        /// ```rust
+        /// # extern crate rocket;
+        /// use rocket::http::ContentType;
+        ///
+        /// assert_eq!(ContentType::JSON.extension().unwrap(), "json");
+        /// assert_eq!(ContentType::JPEG.extension().unwrap(), "jpeg");
+        /// assert_eq!(ContentType::JPEG.extension().unwrap(), "JPEG");
+        /// assert_eq!(ContentType::PDF.extension().unwrap(), "pdf");
+        /// ```
+        ///
+        /// An unknown extension:
+        ///
+        /// ```rust
+        /// # extern crate rocket;
+        /// use rocket::http::ContentType;
+        ///
+        /// let foo = ContentType::new("foo", "bar");
+        /// assert!(foo.extension().is_none());
+        /// ```
+        #[inline]
+        pub fn extension(&self) -> Option<&UncasedStr> {
+            $(if self == &ContentType::$name { return Some($ext.into()) })*
+            None
         }
     );)
 }
@@ -245,6 +286,8 @@ impl ContentType {
         &self.0
     }
 
+    known_extensions!(extension);
+
     known_media_types!(content_types);
 }
 
@@ -336,14 +379,7 @@ impl fmt::Display for ContentType {
 impl Into<Header<'static>> for ContentType {
     #[inline(always)]
     fn into(self) -> Header<'static> {
-        // FIXME: For known media types, don't do `to_string`. Store the whole
-        // string as a `source` and have a way to know that the source is
-        // everything. That removes the allocation here. Then, in
-        // `MediaType::fmt`, write the source string out directly as well.
-        //
-        // We could also use an `enum` for MediaType. But that kinda sucks. But
-        // maybe it's what we want.
-        if let Source::Known(src) = self.0.source {
+        if let Some(src) = self.known_source() {
             Header::new("Content-Type", src)
         } else {
             Header::new("Content-Type", self.to_string())

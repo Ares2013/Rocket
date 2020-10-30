@@ -66,9 +66,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
   --> $DIR/from_form.rs:27:20
    |
-27 |     #[form(field = "isindex")]
+27 |     #[field(name = "isindex")]
    |                    ^^^^^^^^^
    |
+   = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:25:10
    |
@@ -76,17 +77,18 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: duplicate field name
+error: duplicate form field
   --> $DIR/from_form.rs:35:5
    |
 35 |     foo: usize,
-   |     ^^^
+   |     ^^^^^^^^^^
    |
-note: previous definition here
-  --> $DIR/from_form.rs:33:20
+note: previously defined here
+  --> $DIR/from_form.rs:33:5
    |
-33 |     #[form(field = "foo")]
-   |                    ^^^^^
+33 | /     #[field(name = "foo")]
+34 | |     field: String,
+   | |_________________^
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:31:10
    |
@@ -94,17 +96,19 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: duplicate field name
-  --> $DIR/from_form.rs:42:20
+error: duplicate form field
+  --> $DIR/from_form.rs:42:5
    |
-42 |     #[form(field = "hello")]
-   |                    ^^^^^^^
+42 | /     #[field(name = "hello")]
+43 | |     other: String,
+   | |_________________^
    |
-note: previous definition here
-  --> $DIR/from_form.rs:40:20
+note: previously defined here
+  --> $DIR/from_form.rs:40:5
    |
-40 |     #[form(field = "hello")]
-   |                    ^^^^^^^
+40 | /     #[field(name = "hello")]
+41 | |     first: String,
+   | |_________________^
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:38:10
    |
@@ -112,17 +116,18 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: duplicate field name
-  --> $DIR/from_form.rs:49:20
+error: duplicate form field
+  --> $DIR/from_form.rs:49:5
    |
-49 |     #[form(field = "first")]
-   |                    ^^^^^^^
+49 | /     #[field(name = "first")]
+50 | |     other: String,
+   | |_________________^
    |
-note: previous definition here
+note: previously defined here
   --> $DIR/from_form.rs:48:5
    |
 48 |     first: String,
-   |     ^^^^^
+   |     ^^^^^^^^^^^^^
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:46:10
    |
@@ -133,7 +138,7 @@ note: error occurred while deriving `FromForm`
 error: duplicate attribute parameter: field
   --> $DIR/from_form.rs:55:28
    |
-55 |     #[form(field = "blah", field = "bloo")]
+55 |     #[field(name = "blah", field = "bloo")]
    |                            ^^^^^^^^^^^^^^
    |
 note: error occurred while deriving `FromForm`
@@ -143,13 +148,12 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: malformed attribute: expected list
+error: expected list `#[field(..)]`, found bare path "form"
   --> $DIR/from_form.rs:61:7
    |
-61 |     #[form]
+61 |     #[field]
    |       ^^^^
    |
-   = help: expected syntax: #[form(key = value, ..)]
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:59:10
    |
@@ -157,10 +161,10 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: expected key/value pair
+error: expected key/value `key = value`
   --> $DIR/from_form.rs:67:12
    |
-67 |     #[form("blah")]
+67 |     #[field("blah")]
    |            ^^^^^^
    |
 note: error occurred while deriving `FromForm`
@@ -170,10 +174,10 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: expected key/value pair
+error: expected key/value `key = value`
   --> $DIR/from_form.rs:73:12
    |
-73 |     #[form(123)]
+73 |     #[field(123)]
    |            ^^^
    |
 note: error occurred while deriving `FromForm`
@@ -186,7 +190,7 @@ note: error occurred while deriving `FromForm`
 error: unexpected attribute parameter: `beep`
   --> $DIR/from_form.rs:79:12
    |
-79 |     #[form(beep = "bop")]
+79 |     #[field(beep = "bop")]
    |            ^^^^^^^^^^^^
    |
 note: error occurred while deriving `FromForm`
@@ -196,12 +200,13 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: duplicate invocation of `form` attribute
-  --> $DIR/from_form.rs:86:7
+error: duplicate form field renaming
+  --> $DIR/from_form.rs:86:20
    |
-86 |     #[form(field = "bleh")]
-   |       ^^^^
+86 |     #[field(name = "blah")]
+   |                    ^^^^^^
    |
+   = help: a field can only be renamed once
 note: error occurred while deriving `FromForm`
   --> $DIR/from_form.rs:83:10
    |
@@ -212,7 +217,7 @@ note: error occurred while deriving `FromForm`
 error: invalid value: expected string literal
   --> $DIR/from_form.rs:92:20
    |
-92 |     #[form(field = true)]
+92 |     #[field(name = true)]
    |                    ^^^^
    |
 note: error occurred while deriving `FromForm`
@@ -222,10 +227,10 @@ note: error occurred while deriving `FromForm`
    |          ^^^^^^^^
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: expected literal or key/value pair
+error: expected literal, found bare path "field"
   --> $DIR/from_form.rs:98:12
    |
-98 |     #[form(field)]
+98 |     #[field(name)]
    |            ^^^^^
    |
 note: error occurred while deriving `FromForm`
@@ -238,7 +243,7 @@ note: error occurred while deriving `FromForm`
 error: invalid value: expected string literal
    --> $DIR/from_form.rs:104:20
     |
-104 |     #[form(field = 123)]
+104 |     #[field(name = 123)]
     |                    ^^^
     |
 note: error occurred while deriving `FromForm`
@@ -251,9 +256,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:110:20
     |
-110 |     #[form(field = "hello&world")]
+110 |     #[field(name = "hello&world")]
     |                    ^^^^^^^^^^^^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:108:10
     |
@@ -264,9 +270,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:116:20
     |
-116 |     #[form(field = "!@#$%^&*()_")]
+116 |     #[field(name = "!@#$%^&*()_")]
     |                    ^^^^^^^^^^^^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:114:10
     |
@@ -277,9 +284,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:122:20
     |
-122 |     #[form(field = "?")]
+122 |     #[field(name = "?")]
     |                    ^^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:120:10
     |
@@ -290,9 +298,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:128:20
     |
-128 |     #[form(field = "")]
+128 |     #[field(name = "")]
     |                    ^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:126:10
     |
@@ -303,9 +312,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:134:20
     |
-134 |     #[form(field = "a&b")]
+134 |     #[field(name = "a&b")]
     |                    ^^^^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:132:10
     |
@@ -316,9 +326,10 @@ note: error occurred while deriving `FromForm`
 error: invalid form field name
    --> $DIR/from_form.rs:140:20
     |
-140 |     #[form(field = "a=")]
+140 |     #[field(name = "a=")]
     |                    ^^^^
     |
+    = help: field name cannot be `isindex` or contain '&', '=', '?', '.', '[', ']'
 note: error occurred while deriving `FromForm`
    --> $DIR/from_form.rs:138:10
     |

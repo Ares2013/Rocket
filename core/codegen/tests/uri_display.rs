@@ -18,7 +18,7 @@ enum Foo<'r> {
         other: usize,
     },
     Third {
-        #[form(field = "type")]
+        #[field(name = "type")]
         kind: String,
     },
 }

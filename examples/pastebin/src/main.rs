@@ -5,8 +5,10 @@ mod paste_id;
 
 use std::io;
 
+use rocket::State;
 use rocket::data::{Data, ToByteUnit};
-use rocket::response::{content::Plain, Debug};
+use rocket::http::uri::Absolute;
+use rocket::response::content::Plain;
 use rocket::tokio::fs::File;
 
 use crate::paste_id::PasteID;
@@ -15,19 +17,16 @@ const HOST: &str = "http://localhost:8000";
 const ID_LENGTH: usize = 3;
 
 #[post("/", data = "<paste>")]
-async fn upload(paste: Data) -> Result<String, Debug<io::Error>> {
+async fn upload(paste: Data, host: State<'_, Absolute<'_>>) -> io::Result<String> {
     let id = PasteID::new(ID_LENGTH);
-    let filename = format!("upload/{id}", id = id);
-    let url = format!("{host}/{id}\n", host = HOST, id = id);
-
-    paste.open(128.kibibytes()).stream_to_file(filename).await?;
-    Ok(url)
+    paste.open(128.kibibytes()).into_file(id.file_path()).await?;
+    Ok(host.inner().clone().with_origin(uri!(retrieve: id)).to_string())
+    // TODO: Ok(uri!(HOST, retrieve: id))
 }
 
 #[get("/<id>")]
 async fn retrieve(id: PasteID<'_>) -> Option<Plain<File>> {
-    let filename = format!("upload/{id}", id = id);
-    File::open(&filename).await.map(Plain).ok()
+    File::open(id.file_path()).await.map(Plain).ok()
 }
 
 #[get("/")]
@@ -50,5 +49,7 @@ fn index() -> &'static str {
 
 #[launch]
 fn rocket() -> rocket::Rocket {
-    rocket::ignite().mount("/", routes![index, upload, retrieve])
+    rocket::ignite()
+        .manage(Absolute::parse(HOST).expect("valid host"))
+        .mount("/", routes![index, upload, retrieve])
 }

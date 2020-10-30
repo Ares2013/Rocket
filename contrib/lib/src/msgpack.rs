@@ -1,4 +1,5 @@
 //! Automatic MessagePack (de)serialization support.
+
 //!
 //! See the [`MsgPack`](crate::msgpack::MsgPack) type for further details.
 //!
@@ -16,12 +17,8 @@
 
 use std::ops::{Deref, DerefMut};
 
-use tokio::io::AsyncReadExt;
-
-use rocket::request::Request;
-use rocket::outcome::Outcome::*;
-use rocket::data::{Data, ByteUnit, Transform::*, TransformFuture, Transformed};
-use rocket::data::{FromTransformedData, FromDataFuture};
+use rocket::{Request, Data};
+use rocket::data::{ByteUnit, FromTransformedData, Transform::{self, *}, Outcome};
 use rocket::response::{self, content, Responder};
 use rocket::http::Status;
 
@@ -113,41 +110,46 @@ impl<T> MsgPack<T> {
 
 const DEFAULT_LIMIT: ByteUnit = ByteUnit::Mebibyte(1);
 
-impl<'a, T: Deserialize<'a>> FromTransformedData<'a> for MsgPack<T> {
+#[rocket::async_trait]
+impl<'r, T: Deserialize<'r>> FromTransformedData<'r> for MsgPack<T> {
     type Error = Error;
     type Owned = Vec<u8>;
     type Borrowed = [u8];
 
-    fn transform<'r>(r: &'r Request<'_>, d: Data) -> TransformFuture<'r, Self::Owned, Self::Error> {
-        Box::pin(async move {
-            let size_limit = r.limits().get("msgpack").unwrap_or(DEFAULT_LIMIT);
-            let mut buf = Vec::new();
-            let mut reader = d.open(size_limit);
-            match reader.read_to_end(&mut buf).await {
-                Ok(_) => Borrowed(Success(buf)),
-                Err(e) => Borrowed(Failure((Status::BadRequest, Error::InvalidDataRead(e)))),
-            }
-        })
+    async fn transform(
+        req: &'r Request<'_>,
+        data: Data
+    ) -> Outcome<Transform<Self::Owned>, Self::Error> {
+        let limit = req.limits().get("msgpack").unwrap_or(DEFAULT_LIMIT);
+        match data.open(limit).into_bytes().await {
+            Ok(buf) if buf.is_complete() => Outcome::Success(Borrowed(buf.into_inner())),
+            Ok(_) => {
+                let eof = std::io::ErrorKind::UnexpectedEof;
+                let e = std::io::Error::new(eof, "data limit exceeded");
+                Outcome::Failure((Status::BadRequest, Error::InvalidDataRead(e)))
+            },
+            Err(e) => Outcome::Failure((Status::BadRequest, Error::InvalidDataRead(e))),
+        }
     }
 
-    fn from_data(_: &'a Request<'_>, o: Transformed<'a, Self>) -> FromDataFuture<'a, Self, Self::Error> {
+    async fn from_data(
+        _: &'r Request<'_>,
+        transform: Transform<Self::Owned, &'r mut Self::Borrowed>
+    ) -> Outcome<Self, Self::Error> {
         use self::Error::*;
 
-        Box::pin(async move {
-            let buf = try_outcome!(o.borrowed());
-            match rmp_serde::from_slice(&buf) {
-                Ok(val) => Success(MsgPack(val)),
-                Err(e) => {
-                    error_!("Couldn't parse MessagePack body: {:?}", e);
-                    match e {
-                        TypeMismatch(_) | OutOfRange | LengthMismatch(_) => {
-                            Failure((Status::UnprocessableEntity, e))
-                        }
-                        _ => Failure((Status::BadRequest, e)),
-                    }
+        let buf = transform.borrowed();
+        match rmp_serde::from_slice(buf) {
+            Ok(val) => Outcome::Success(MsgPack(val)),
+            Err(e) => {
+                error_!("failed to parse MessagePack: {:?}", e);
+                match e {
+                    TypeMismatch(_) | OutOfRange | LengthMismatch(_) =>
+                        Outcome::Failure((Status::UnprocessableEntity, e)),
+                    _ => Outcome::Failure((Status::BadRequest, e)),
                 }
             }
-        })
+        }
     }
 }
 

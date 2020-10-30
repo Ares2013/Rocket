@@ -1,9 +1,8 @@
 use std::str::FromStr;
 use std::path::PathBuf;
 use std::fmt::Debug;
-use std::borrow::Cow;
 
-use crate::http::{RawStr, uri::{Segments, SegmentError}};
+use crate::http::uri::{Segments, PathError};
 
 /// Trait to convert a dynamic path segment string to a concrete value.
 ///
@@ -147,8 +146,11 @@ use crate::http::{RawStr, uri::{Segments, SegmentError}};
 ///     type Error = &'r RawStr;
 ///
 ///     fn from_param(param: &'r RawStr) -> Result<Self, Self::Error> {
-///         let (key, val_str) = match param.find(':') {
-///             Some(i) if i > 0 => (&param[..i], &param[(i + 1)..]),
+///         // We can convert `param` into a `str` since we'll check every
+///         // character for safety later.
+///         let param_str = param.as_str();
+///         let (key, val_str) = match param_str.find(':') {
+///             Some(i) if i > 0 => (&param_str[..i], &param_str[(i + 1)..]),
 ///             _ => return Err(param)
 ///         };
 ///
@@ -156,12 +158,9 @@ use crate::http::{RawStr, uri::{Segments, SegmentError}};
 ///             return Err(param);
 ///         }
 ///
-///         val_str.parse().map(|value| {
-///             MyParam {
-///                 key: key,
-///                 value: value
-///             }
-///         }).map_err(|_| param)
+///         val_str.parse()
+///             .map(|value| MyParam { key, value })
+///             .map_err(|_| param)
 ///     }
 /// }
 /// ```
@@ -198,44 +197,36 @@ pub trait FromParam<'a>: Sized {
 
     /// Parses and validates an instance of `Self` from a path parameter string
     /// or returns an `Error` if parsing or validation fails.
-    fn from_param(param: &'a RawStr) -> Result<Self, Self::Error>;
+    fn from_param(param: &'a str) -> Result<Self, Self::Error>;
 }
 
-impl<'a> FromParam<'a> for &'a RawStr {
+impl<'a> FromParam<'a> for &'a str {
     type Error = std::convert::Infallible;
 
     #[inline(always)]
-    fn from_param(param: &'a RawStr) -> Result<&'a RawStr, Self::Error> {
+    fn from_param(param: &'a str) -> Result<&'a str, Self::Error> {
         Ok(param)
     }
 }
 
 impl<'a> FromParam<'a> for String {
-    type Error = &'a RawStr;
+    type Error = &'a str;
 
     #[inline(always)]
-    fn from_param(param: &'a RawStr) -> Result<String, Self::Error> {
-        param.percent_decode().map(|cow| cow.into_owned()).map_err(|_| param)
-    }
-}
-
-impl<'a> FromParam<'a> for Cow<'a, str> {
-    type Error = &'a RawStr;
-
-    #[inline(always)]
-    fn from_param(param: &'a RawStr) -> Result<Cow<'a, str>, Self::Error> {
-        param.percent_decode().map_err(|_| param)
+    fn from_param(param: &'a str) -> Result<String, Self::Error> {
+        warn_!("this is deprecated");
+        Ok(param.to_string())
     }
 }
 
 macro_rules! impl_with_fromstr {
     ($($T:ty),+) => ($(
         impl<'a> FromParam<'a> for $T {
-            type Error = &'a RawStr;
+            type Error = &'a str;
 
             #[inline(always)]
-            fn from_param(param: &'a RawStr) -> Result<Self, Self::Error> {
-                <$T as FromStr>::from_str(param.as_str()).map_err(|_| param)
+            fn from_param(param: &'a str) -> Result<Self, Self::Error> {
+                <$T as FromStr>::from_str(param).map_err(|_| param)
             }
         }
     )+)
@@ -258,7 +249,7 @@ impl<'a, T: FromParam<'a>> FromParam<'a> for Result<T, T::Error> {
     type Error = std::convert::Infallible;
 
     #[inline]
-    fn from_param(param: &'a RawStr) -> Result<Self, Self::Error> {
+    fn from_param(param: &'a str) -> Result<Self, Self::Error> {
         match T::from_param(param) {
             Ok(val) => Ok(Ok(val)),
             Err(e) => Ok(Err(e)),
@@ -270,7 +261,7 @@ impl<'a, T: FromParam<'a>> FromParam<'a> for Option<T> {
     type Error = std::convert::Infallible;
 
     #[inline]
-    fn from_param(param: &'a RawStr) -> Result<Self, Self::Error> {
+    fn from_param(param: &'a str) -> Result<Self, Self::Error> {
         match T::from_param(param) {
             Ok(val) => Ok(Some(val)),
             Err(_) => Ok(None)
@@ -296,20 +287,20 @@ impl<'a, T: FromParam<'a>> FromParam<'a> for Option<T> {
 /// any other segments that begin with "*" or "." are ignored.  If a
 /// percent-decoded segment results in invalid UTF8, an `Err` is returned with
 /// the `Utf8Error`.
-pub trait FromSegments<'a>: Sized {
+pub trait FromSegments<'r>: Sized {
     /// The associated error to be returned when parsing fails.
     type Error: Debug;
 
     /// Parses an instance of `Self` from many dynamic path parameter strings or
     /// returns an `Error` if one cannot be parsed.
-    fn from_segments(segments: Segments<'a>) -> Result<Self, Self::Error>;
+    fn from_segments(segments: Segments<'r>) -> Result<Self, Self::Error>;
 }
 
-impl<'a> FromSegments<'a> for Segments<'a> {
+impl<'r> FromSegments<'r> for Segments<'r> {
     type Error = std::convert::Infallible;
 
     #[inline(always)]
-    fn from_segments(segments: Segments<'a>) -> Result<Segments<'a>, Self::Error> {
+    fn from_segments(segments: Segments<'r>) -> Result<Segments<'r>, Self::Error> {
         Ok(segments)
     }
 }
@@ -331,18 +322,18 @@ impl<'a> FromSegments<'a> for Segments<'a> {
 /// safe to interpolate within, or use as a suffix of, a path without additional
 /// checks.
 impl FromSegments<'_> for PathBuf {
-    type Error = SegmentError;
+    type Error = PathError;
 
-    fn from_segments(segments: Segments<'_>) -> Result<PathBuf, SegmentError> {
-        segments.into_path_buf(false)
+    fn from_segments(segments: Segments<'_>) -> Result<Self, Self::Error> {
+        segments.to_path_buf(false)
     }
 }
 
-impl<'a, T: FromSegments<'a>> FromSegments<'a> for Result<T, T::Error> {
+impl<'r, T: FromSegments<'r>> FromSegments<'r> for Result<T, T::Error> {
     type Error = std::convert::Infallible;
 
     #[inline]
-    fn from_segments(segments: Segments<'a>) -> Result<Result<T, T::Error>, Self::Error> {
+    fn from_segments(segments: Segments<'r>) -> Result<Result<T, T::Error>, Self::Error> {
         match T::from_segments(segments) {
             Ok(val) => Ok(Ok(val)),
             Err(e) => Ok(Err(e)),
@@ -350,11 +341,11 @@ impl<'a, T: FromSegments<'a>> FromSegments<'a> for Result<T, T::Error> {
     }
 }
 
-impl<'a, T: FromSegments<'a>> FromSegments<'a> for Option<T> {
+impl<'r, T: FromSegments<'r>> FromSegments<'r> for Option<T> {
     type Error = std::convert::Infallible;
 
     #[inline]
-    fn from_segments(segments: Segments<'a>) -> Result<Option<T>, Self::Error> {
+    fn from_segments(segments: Segments<'r>) -> Result<Option<T>, Self::Error> {
         match T::from_segments(segments) {
             Ok(val) => Ok(Some(val)),
             Err(_) => Ok(None)

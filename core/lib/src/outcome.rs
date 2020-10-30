@@ -616,10 +616,11 @@ impl<'a, S: Send + 'a, E: Send + 'a, F: Send + 'a> Outcome<S, E, F> {
     }
 }
 
-/// Unwraps an [`Outcome`] to its success value, otherwise propagating the
-/// forward or failure.
+/// Unwraps a [`Success`](Outcome::Success) or propagates a `Forward` or
+/// `Failure`.
 ///
-/// In the case of a `Forward` or `Failure` variant, the inner type is passed to
+/// This is just like `?` (or previously, `try!`), but for `Outcome`. In the
+/// case of a `Forward` or `Failure` variant, the inner type is passed to
 /// [`From`](std::convert::From), allowing for the conversion between specific
 /// and more general types. The resulting forward/error is immediately returned.
 ///
@@ -632,8 +633,10 @@ impl<'a, S: Send + 'a, E: Send + 'a, F: Send + 'a> Outcome<S, E, F> {
 ///
 /// ```rust,no_run
 /// # #[macro_use] extern crate rocket;
-/// # use std::sync::atomic::{AtomicUsize, Ordering};
-/// use rocket::request::{self, Request, FromRequest, State};
+/// use std::sync::atomic::{AtomicUsize, Ordering};
+///
+/// use rocket::State;
+/// use rocket::request::{self, Request, FromRequest};
 /// use rocket::outcome::Outcome::*;
 ///
 /// #[derive(Default)]

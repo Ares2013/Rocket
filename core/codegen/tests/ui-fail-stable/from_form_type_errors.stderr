@@ -1,15 +1,17 @@
-error[E0277]: the trait bound `Unknown: FromFormValue<'_>` is not satisfied
- --> $DIR/from_form_type_errors.rs:7:5
+error[E0277]: the trait bound `Unknown: FromFormField<'_>` is not satisfied
+ --> $DIR/from_form_type_errors.rs:5:10
   |
-7 |     field: Unknown,
-  |     ^^^^^ the trait `FromFormValue<'_>` is not implemented for `Unknown`
+5 | #[derive(FromForm)]
+  |          ^^^^^^^^ the trait `FromFormField<'_>` is not implemented for `Unknown`
   |
-  = note: required by `from_form_value`
+  = note: required because of the requirements on the impl of `FromForm<'__f>` for `Unknown`
+  = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `Foo<usize>: FromFormValue<'_>` is not satisfied
-  --> $DIR/from_form_type_errors.rs:14:5
+error[E0277]: the trait bound `Foo<usize>: FromFormField<'_>` is not satisfied
+  --> $DIR/from_form_type_errors.rs:12:10
    |
-14 |     field: Foo<usize>,
-   |     ^^^^^ the trait `FromFormValue<'_>` is not implemented for `Foo<usize>`
+12 | #[derive(FromForm)]
+   |          ^^^^^^^^ the trait `FromFormField<'_>` is not implemented for `Foo<usize>`
    |
-   = note: required by `from_form_value`
+   = note: required because of the requirements on the impl of `FromForm<'__f>` for `Foo<usize>`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)

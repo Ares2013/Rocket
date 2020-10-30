@@ -1,5 +1,5 @@
-use std::fmt;
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 use rocket::request::FromParam;
 use rocket::http::RawStr;
@@ -9,9 +9,10 @@ use rand::{self, Rng};
 const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 /// A _probably_ unique paste ID.
+#[derive(UriDisplayPath)]
 pub struct PasteID<'a>(Cow<'a, str>);
 
-impl<'a> PasteID<'a> {
+impl PasteID<'_> {
     /// Generate a _probably_ unique ID with `size` characters. For readability,
     /// the characters used are from the sets [0-9], [A-Z], [a-z]. The
     /// probability of a collision depends on the value of `size` and the number
@@ -25,17 +26,10 @@ impl<'a> PasteID<'a> {
 
         PasteID(Cow::Owned(id))
     }
-}
 
-impl<'a> fmt::Display for PasteID<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+    pub fn file_path(&self) -> PathBuf {
+        Path::new("upload").join(self.0.as_ref())
     }
-}
-
-/// Returns `true` if `id` is a valid paste ID and `false` otherwise.
-fn valid_id(id: &str) -> bool {
-    id.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 /// Returns an instance of `PasteID` if the path segment is a valid ID.
@@ -43,11 +37,10 @@ fn valid_id(id: &str) -> bool {
 impl<'a> FromParam<'a> for PasteID<'a> {
     type Error = &'a RawStr;
 
-    fn from_param(param: &'a RawStr) -> Result<PasteID<'a>, &'a RawStr> {
-        match valid_id(param) {
-            true => Ok(PasteID(Cow::Borrowed(param))),
+    fn from_param(param: &'a RawStr) -> Result<Self, Self::Error> {
+        match param.as_str().chars().all(|c| c.is_ascii_alphanumeric()) {
+            true => Ok(PasteID(Cow::Borrowed(param.as_str()))),
             false => Err(param)
         }
     }
 }
-

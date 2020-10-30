@@ -32,7 +32,7 @@ use crate::http::Status;
 /// }
 ///
 /// #[get("/")]
-/// fn index(state: State<MyConfig>) -> String {
+/// fn index(state: State<'_, MyConfig>) -> String {
 ///     format!("The config value is: {}", state.user_val)
 /// }
 ///
@@ -88,7 +88,7 @@ use crate::http::Status;
 /// struct MyManagedState(usize);
 ///
 /// #[get("/")]
-/// fn handler(state: State<MyManagedState>) -> String {
+/// fn handler(state: State<'_, MyManagedState>) -> String {
 ///     state.0.to_string()
 /// }
 ///
@@ -122,7 +122,7 @@ impl<'r, T: Send + Sync + 'static> State<'r, T> {
     /// }
     ///
     /// // Use the `Deref` implementation which coerces implicitly
-    /// fn handler2(config: State<MyConfig>) -> String {
+    /// fn handler2(config: State<'_, MyConfig>) -> String {
     ///     config.user_val.clone()
     /// }
     /// ```

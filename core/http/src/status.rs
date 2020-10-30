@@ -84,7 +84,7 @@ impl StatusClass {
 /// assert_eq!(not_found.reason, "Not Found");
 /// assert_eq!(not_found.to_string(), "404 Not Found".to_string());
 /// ```
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Status {
     /// The HTTP status code associated with this status.
     pub code: u16,
@@ -275,5 +275,31 @@ impl fmt::Display for Status {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.code, self.reason)
+    }
+}
+
+impl std::hash::Hash for Status {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.code.hash(state)
+    }
+}
+
+impl PartialEq for Status {
+    fn eq(&self, other: &Self) -> bool {
+        self.code.eq(&other.code)
+    }
+}
+
+impl Eq for Status { }
+
+impl PartialOrd for Status {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.code.partial_cmp(&other.code)
+    }
+}
+
+impl Ord for Status {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.code.cmp(&other.code)
     }
 }

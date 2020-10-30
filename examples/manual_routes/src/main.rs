@@ -35,7 +35,7 @@ fn echo_url<'r>(req: &'r Request, _: Data) -> HandlerFuture<'r> {
 
     Box::pin(async move {
         let param = try_outcome!(param_outcome);
-        Outcome::try_from(req, RawStr::from_str(param).url_decode())
+        Outcome::try_from(req, RawStr::new(param).url_decode())
     })
 }
 
