@@ -187,7 +187,7 @@ macro_rules! route_attribute {
         /// # use std::path::PathBuf;
         /// # #[derive(FromForm)] struct F { a: usize }
         /// #[get("/<foo>/bar/<baz..>?<msg>&closed&<rest..>", data = "<form>")]
-        /// # fn f(foo: usize, baz: PathBuf, msg: String, rest: Form<F>, form: Form<F>) {  }
+        /// # fn f(foo: usize, baz: PathBuf, msg: String, rest: F, form: Form<F>) {  }
         /// ```
         ///
         /// The type of each function argument corresponding to a dynamic
@@ -202,8 +202,8 @@ macro_rules! route_attribute {
         /// | path     | `<ident>`   | [`FromParam`]     |
         /// | path     | `<ident..>` | [`FromSegments`]  |
         /// | query    | `<ident>`   | [`FromFormField`] |
-        /// | query    | `<ident..>` | [`FromQuery`]     |
-        /// | data     | `<ident>`   | [`FromTransformedData`]      |
+        /// | query    | `<ident..>` | [`FromFrom`]      |
+        /// | data     | `<ident>`   | [`FromData`]      |
         ///
         /// The type of each function argument that _does not_ have a
         /// corresponding dynamic parameter is required to implement the
@@ -215,8 +215,8 @@ macro_rules! route_attribute {
         /// [`FromParam`]: ../rocket/request/trait.FromParam.html
         /// [`FromSegments`]: ../rocket/request/trait.FromSegments.html
         /// [`FromFormField`]: ../rocket/request/trait.FromFormField.html
-        /// [`FromQuery`]: ../rocket/request/trait.FromQuery.html
-        /// [`FromTransformedData`]: ../rocket/data/trait.FromTransformedData.html
+        /// [`FromForm`]: ../rocket/form/trait.FromForm.html
+        /// [`FromData`]: ../rocket/data/trait.FromData.html
         /// [`FromRequest`]: ../rocket/request/trait.FromRequest.html
         /// [`Route`]: ../rocket/struct.Route.html
         /// [`Responder`]: ../rocket/response/trait.Responder.html
@@ -248,7 +248,7 @@ macro_rules! route_attribute {
         ///
         ///            If a data guard fails, the request is forwarded if the
         ///            [`Outcome`] is `Forward` or failed if the [`Outcome`] is
-        ///            `Failure`. See [`FromTransformedData` Outcomes] for further detail.
+        ///            `Failure`. See [`FromData` Outcomes] for further detail.
         ///
         ///      If all validation succeeds, the decorated function is called.
         ///      The returned value is used to generate a [`Response`] via the
@@ -271,7 +271,7 @@ macro_rules! route_attribute {
         /// [`Outcome`]: ../rocket/outcome/enum.Outcome.html
         /// [`Response`]: ../rocket/struct.Response.html
         /// [`FromRequest` Outcomes]: ../rocket/request/trait.FromRequest.html#outcomes
-        /// [`FromTransformedData` Outcomes]: ../rocket/data/trait.FromTransformedData.html#outcomes
+        /// [`FromData` Outcomes]: ../rocket/data/trait.FromData.html#outcomes
         #[proc_macro_attribute]
         pub fn $name(args: TokenStream, input: TokenStream) -> TokenStream {
             emit!(attribute::route::route_attribute($method, args, input))
@@ -429,7 +429,6 @@ pub fn launch(args: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// [`FromFormField`]: ../rocket/request/trait.FromFormField.html
 /// [`FromFormField::Error`]: ../rocket/request/trait.FromFormField.html#associatedtype.Error
-/// [`&RawStr`]: ../rocket/http/struct.RawStr.html
 // FIXME(rustdoc): We should be able to refer to items in `rocket`.
 #[proc_macro_derive(FromFormField, attributes(field))]
 pub fn derive_from_form_field(input: TokenStream) -> TokenStream {

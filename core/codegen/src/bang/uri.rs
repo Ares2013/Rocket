@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-use devise::{syn, Result, ext::SpanDiagnosticExt};
+use devise::{syn, Result};
+use devise::ext::{SpanDiagnosticExt, quote_respanned};
 
 use crate::http::{uri::{Origin, Path, Query}, ext::IntoOwned};
 use crate::http::route::{RouteSegment, Kind};
@@ -112,16 +113,17 @@ fn extract_exprs<'a>(internal: &'a InternalUriParams) -> Result<(
 }
 
 fn add_binding(to: &mut Vec<TokenStream>, ident: &Ident, ty: &Type, expr: &Expr, source: Source) {
-    define_spanned_export!(ty.span() => _uri);
+    let span = expr.span();
+    define_spanned_export!(span => _uri);
     let part = match source {
-        Source::Query => quote_spanned!(ty.span() => #_uri::Query),
-        _ => quote_spanned!(ty.span() => #_uri::Path),
+        Source::Query => quote_spanned!(span => #_uri::Query),
+        _ => quote_spanned!(span => #_uri::Path),
     };
 
     let tmp_ident = ident.clone().with_span(expr.span());
-    let let_stmt = quote_spanned!(expr.span() => let #tmp_ident = #expr);
+    let let_stmt = quote_spanned!(span => let #tmp_ident = #expr);
 
-    to.push(quote_spanned!(ty.span() =>
+    to.push(quote_spanned!(span =>
         #[allow(non_snake_case)] #let_stmt;
         let #ident = <#ty as #_uri::FromUriParam<#part, _>>::from_uri_param(#tmp_ident);
     ));
@@ -181,7 +183,7 @@ fn explode_query<'a, I: Iterator<Item = (&'a Ident, &'a Type, &'a ArgExpr)>>(
             None => {
                 // Force a typecheck for the `Ignoreable` trait. Note that write
                 // out the path to `is_ignorable` to get the right span.
-                bindings.push(quote_spanned! { arg_expr.span() =>
+                bindings.push(quote_respanned! { arg_expr.span() =>
                     rocket::http::uri::assert_ignorable::<#uri_mod::Query, #ty>();
                 });
 

@@ -69,7 +69,7 @@ fn main() {
 
     // These are all okay.
     uri!(optionals_q: _, _);
-    uri!(optionals_q: id = 10, name = "Bob".to_string());
-    uri!(optionals_q: _, "Bob".into());
+    uri!(optionals_q: id = Some(10), name = Some("Bob".to_string()));
+    uri!(optionals_q: _, Some("Bob".into()));
     uri!(optionals_q: id = _, name = _);
 }

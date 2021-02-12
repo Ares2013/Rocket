@@ -13,19 +13,19 @@ pub struct Context<'v> {
 }
 
 impl<'v> Context<'v> {
-    fn add_errors(&mut self, errors: Errors<'v>) {
-        for e in errors {
-            if let Some(ref name) = e.name {
-                if let Some(errors) = self.errors.get_mut(name) {
-                    errors.push(e);
-                } else {
-                    self.errors.insert(name.clone(), e.into());
-                }
-            } else {
-                self.other_errors.push(e);
-            }
-        }
-    }
+    // fn add_errors(&mut self, errors: Errors<'v>) {
+    //     for e in errors {
+    //         if let Some(ref name) = e.name {
+    //             if let Some(errors) = self.errors.get_mut(name) {
+    //                 errors.push(e);
+    //             } else {
+    //                 self.errors.insert(name.clone(), e.into());
+    //             }
+    //         } else {
+    //             self.other_errors.push(e);
+    //         }
+    //     }
+    // }
 
     pub fn value<N: AsRef<Name>>(&self, name: N) -> Option<&'v RawStr> {
         self.values.get(name.as_ref())?.get(0).cloned()
