@@ -1,6 +1,5 @@
 #[macro_use] extern crate rocket;
 
-use rocket::http::RawStr;
 use rocket::http::uri::{UriDisplay, Query, Path};
 
 macro_rules! assert_uri_display_query {
@@ -12,9 +11,9 @@ macro_rules! assert_uri_display_query {
 
 #[derive(UriDisplayQuery, Clone)]
 enum Foo<'r> {
-    First(&'r RawStr),
+    First(&'r str),
     Second {
-        inner: &'r RawStr,
+        inner: &'r str,
         other: usize,
     },
     Third {
@@ -95,7 +94,7 @@ fn uri_display_baz() {
 struct Bam<'a> {
     foo: &'a str,
     bar: Option<usize>,
-    baz: Result<&'a RawStr, usize>,
+    baz: Result<&'a str, usize>,
 }
 
 #[test]

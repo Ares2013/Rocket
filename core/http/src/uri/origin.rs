@@ -377,11 +377,14 @@ impl<'a> Origin<'a> {
     ///
     /// let old_uri = Origin::parse("/a/b/c").unwrap();
     /// let expected_uri = Origin::parse("/a/b/c/").unwrap();
-    /// assert_eq!(old_uri.map_path(|p| p.to_owned() + "/"), Some(expected_uri));
+    /// assert_eq!(old_uri.map_path(|p| format!("{}/", p)), Some(expected_uri));
     ///
     /// let old_uri = Origin::parse("/a/b/c/").unwrap();
     /// let expected_uri = Origin::parse("/a/b/c//").unwrap();
-    /// assert_eq!(old_uri.map_path(|p| p.to_owned() + "/"), Some(expected_uri));
+    /// assert_eq!(old_uri.map_path(|p| format!("{}/", p)), Some(expected_uri));
+    ///
+    /// let old_uri = Origin::parse("/a/b/c/").unwrap();
+    /// assert_eq!(old_uri.map_path(|p| format!("hi/{}", p)), None);
     /// ```
     #[inline]
     pub fn map_path<F: FnOnce(&RawStr) -> String>(&self, f: F) -> Option<Self> {
@@ -574,8 +577,11 @@ impl<'a> Origin<'a> {
     /// assert!(query_segs.is_empty());
     ///
     /// let uri = Origin::parse("/foo/bar?a+b%2F=some+one%40gmail.com&&%26%3D2").unwrap();
-    /// let query_segs: Vec<_> = uri.raw_query_segments().collect();
-    /// assert_eq!(query_segs, &[("a+b%2f", "some+one%40gmail.com"), ("%26%3D2", "")]);
+    /// let query_segs: Vec<_> = uri.raw_query_segments()
+    ///     .map(|(name, val)| (name.as_str(), val.as_str()))
+    ///     .collect();
+    ///
+    /// assert_eq!(query_segs, &[("a+b%2F", "some+one%40gmail.com"), ("%26%3D2", "")]);
     /// ```
     #[inline(always)]
     pub fn raw_query_segments(&self) -> impl Iterator<Item = (&RawStr, &RawStr)> {

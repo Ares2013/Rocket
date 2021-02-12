@@ -3,20 +3,9 @@ use std::path::PathBuf;
 use crate::RawStr;
 use crate::parse::IndexedStr;
 
-/// Errors which can occur when attempting to interpret a segment string as a
-/// valid path segment.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum PathError {
-    /// The segment started with the wrapped invalid character.
-    BadStart(char),
-    /// The segment contained the wrapped invalid character.
-    BadChar(char),
-    /// The segment ended with the wrapped invalid character.
-    BadEnd(char),
-}
-
-/// Iterator over the percent-decoded segments of a URI path. Skips empty
-/// segments.
+/// Iterator over the non-empty, percent-decoded segments of a URI path.
+///
+/// Returned by [`Origin::path_segments()`].
 ///
 /// ### Examples
 ///
@@ -25,7 +14,7 @@ pub enum PathError {
 /// use rocket::http::uri::Origin;
 ///
 /// let uri = Origin::parse("/a%20z/////b/c////////d").unwrap();
-/// let segments = uri.segments();
+/// let segments = uri.path_segments();
 /// for (i, segment) in segments.enumerate() {
 ///     match i {
 ///         0 => assert_eq!(segment, "a z"),
@@ -35,12 +24,27 @@ pub enum PathError {
 ///         _ => panic!("only four segments")
 ///     }
 /// }
+/// # assert_eq!(uri.path_segments().len(), 4);
+/// # assert_eq!(uri.path_segments().count(), 4);
+/// # assert_eq!(uri.path_segments().next(), Some("a z"));
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Segments<'o> {
     pub(super) source: &'o RawStr,
     pub(super) segments: &'o [IndexedStr<'static>],
     pub(super) pos: usize,
+}
+
+/// An interpreting a segment as a valid [`PathBuf`] segment in
+/// [`Segments::to_path_buf()`].
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum PathError {
+    /// The segment started with the wrapped invalid character.
+    BadStart(char),
+    /// The segment contained the wrapped invalid character.
+    BadChar(char),
+    /// The segment ended with the wrapped invalid character.
+    BadEnd(char),
 }
 
 impl<'o> Segments<'o> {

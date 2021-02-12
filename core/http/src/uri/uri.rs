@@ -97,7 +97,7 @@ impl<'a> Uri<'a> {
     /// let uri = Uri::parse("/a/b/c?query").expect("valid URI");
     /// let origin = uri.origin().expect("origin URI");
     /// assert_eq!(origin.path(), "/a/b/c");
-    /// assert_eq!(origin.query(), Some("query"));
+    /// assert_eq!(origin.query().unwrap(), "query");
     ///
     /// // Invalid URIs fail to parse.
     /// Uri::parse("foo bar").expect_err("invalid URI");
