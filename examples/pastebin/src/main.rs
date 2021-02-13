@@ -11,21 +11,21 @@ use rocket::http::uri::Absolute;
 use rocket::response::content::Plain;
 use rocket::tokio::fs::File;
 
-use crate::paste_id::PasteID;
+use crate::paste_id::PasteId;
 
 const HOST: &str = "http://localhost:8000";
 const ID_LENGTH: usize = 3;
 
 #[post("/", data = "<paste>")]
 async fn upload(paste: Data, host: State<'_, Absolute<'_>>) -> io::Result<String> {
-    let id = PasteID::new(ID_LENGTH);
+    let id = PasteId::new(ID_LENGTH);
     paste.open(128.kibibytes()).into_file(id.file_path()).await?;
     Ok(host.inner().clone().with_origin(uri!(retrieve: id)).to_string())
     // TODO: Ok(uri!(HOST, retrieve: id))
 }
 
 #[get("/<id>")]
-async fn retrieve(id: PasteID<'_>) -> Option<Plain<File>> {
+async fn retrieve(id: PasteId<'_>) -> Option<Plain<File>> {
     File::open(id.file_path()).await.map(Plain).ok()
 }
 

@@ -1,21 +1,20 @@
 use std::fmt::Debug;
 
-use rocket::form::{Form, Strict, FromForm, Context, ValueField, Options};
+use rocket::form::{Form, FromForm};
 use rocket::form::error::{Error, Errors, ErrorKind};
-use rocket::http::RawStr;
 
 #[derive(Debug, FromForm)]
 struct Cat<'v> {
     #[field(validate = len(5..))]
-    name: &'v RawStr,
+    name: &'v str,
     #[field(validate = starts_with("kitty"))]
-    nick: &'v RawStr,
+    nick: &'v str,
 }
 
 #[derive(Debug, FromForm)]
 struct Dog<'v> {
     #[field(validate = len(5..))]
-    name: &'v RawStr,
+    name: &'v str,
 }
 
 #[derive(Debug, FromForm)]
@@ -34,13 +33,9 @@ fn starts_with<'v, S: AsRef<str>>(string: S, prefix: &str) -> Result<(), Errors<
     Ok(())
 }
 
-fn parse<'v, T: FromForm<'v> + 'v>(string: &'v str) -> Result<T, Errors<'v>> {
-    Form::<Strict<T>>::parse_url_encoded(string).map(|v| v.into_inner())
-}
-
 #[track_caller]
 fn errors<'v, T: FromForm<'v> + Debug + 'v>(string: &'v str) -> Errors<'v> {
-    parse::<T>(string).expect_err("expected an error")
+    Form::<T>::parse(string).expect_err("expected an error")
 }
 
 #[test]
@@ -118,7 +113,7 @@ fn test_form_validation_context() {
     assert_eq!(exact(&c, "cats[0].nick", None), 0);
 
     assert_eq!(exact(&c, "cats", None), 1);
-    assert_eq!(exact(&c, "cats", Missing), 1);
+    assert_eq!(exact(&c, "cats", InvalidLength { min: Some(1), max: None }), 1);
 
     assert_eq!(fuzzy(&c, "kitty.nick", Missing), 1);
     assert_eq!(fuzzy(&c, "kitty.nick", None), 1);
@@ -128,7 +123,6 @@ fn test_form_validation_context() {
     assert_eq!(exact(&c, "cats[0].nick", None), 0);
 
     let c = errors::<Person>("kitty.name=Michael&kitty.nick=kittykat&dog.name=woofy");
-    eprintln!("{:?}", c);
     assert_eq!(c.iter().count(), 1);
     assert_eq!(exact(&c, "cats", None), 1);
     assert_eq!(exact(&c, "cats", InvalidLength { min: Some(1), max: None }), 1);

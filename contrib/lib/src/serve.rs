@@ -356,7 +356,7 @@ async fn handle_dir<'r, P>(opt: Options, r: &'r Request<'_>, d: Data, p: P) -> O
     where P: AsRef<Path>
 {
     if opt.contains(Options::NormalizeDirs) && !r.uri().path().ends_with('/') {
-        let new_path = r.uri().map_path(|p| p.to_owned() + "/")
+        let new_path = r.uri().map_path(|p| format!("{}/", p))
             .expect("adding a trailing slash to a known good path results in a valid path")
             .into_owned();
 
@@ -385,9 +385,9 @@ impl Handler for StaticFiles {
         // Otherwise, we're handling segments. Get the segments as a `PathBuf`,
         // only allowing dotfiles if the user allowed it.
         let allow_dotfiles = self.options.contains(Options::DotFiles);
-        let path = req.get_segments::<Segments<'_>>(0)
+        let path = req.segments::<Segments<'_>>(0..)
             .and_then(|res| res.ok())
-            .and_then(|segments| segments.into_path_buf(allow_dotfiles).ok())
+            .and_then(|segments| segments.to_path_buf(allow_dotfiles).ok())
             .map(|path| self.root.join(path));
 
         match path {

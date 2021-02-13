@@ -38,8 +38,8 @@ error[E0277]: the trait bound `Q: FromData<'_>` is not satisfied
     |
    ::: $WORKSPACE/core/lib/src/data/from_data.rs
     |
-    | #[crate::async_trait]
-    | --------------------- required by this bound in `rocket::data::FromData::from_data`
+    |     async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error>;
+    |                                         -- required by this bound in `rocket::data::FromData::from_data`
 
 error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
    --> $DIR/route-type-errors.rs:21:7
@@ -49,8 +49,8 @@ error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
     |
    ::: $WORKSPACE/core/lib/src/request/from_request.rs
     |
-    | #[crate::async_trait]
-    | --------------------- required by this bound in `from_request`
+    | pub trait FromRequest<'a, 'r>: Sized {
+    |                           -- required by this bound in `from_request`
 
 error[E0277]: the trait bound `Q: FromParam<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:21:13
@@ -68,8 +68,8 @@ error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
     |
    ::: $WORKSPACE/core/lib/src/request/from_request.rs
     |
-    | #[crate::async_trait]
-    | --------------------- required by this bound in `from_request`
+    | pub trait FromRequest<'a, 'r>: Sized {
+    |                           -- required by this bound in `from_request`
 
 error[E0277]: the trait bound `Q: FromParam<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:24:13

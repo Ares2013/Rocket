@@ -77,10 +77,8 @@ not just the world, we can declare a route like so:
 # #[macro_use] extern crate rocket;
 # fn main() {}
 
-use rocket::http::RawStr;
-
 #[get("/hello/<name>")]
-fn hello(name: &RawStr) -> String {
+fn hello(name: &str) -> String {
     format!("Hello, {}!", name)
 }
 ```
@@ -114,24 +112,25 @@ fn hello(name: String, age: u8, cool: bool) -> String {
 [`FromParam`]: @api/rocket/request/trait.FromParam.html
 [`FromParam` API docs]: @api/rocket/request/trait.FromParam.html
 
-! note: Rocket types _raw_ strings separately from decoded strings.
-
-  You may have noticed an unfamiliar [`RawStr`] type in the code example above.
-  This is a special type, provided by Rocket, that represents an unsanitized,
-  unvalidated, and undecoded raw string from an HTTP message. It exists to
-  separate validated string inputs, represented by types such as `String`,
-  `&str`, and `Cow<str>`, from unvalidated inputs, represented by `&RawStr`. It
-  also provides helpful methods to convert the unvalidated string into a
-  validated one.
-
-  Because `&RawStr` implements [`FromParam`], it can be used as the type of a
-  dynamic segment, as in the example above, where the value refers to a
-  potentially undecoded string. By contrast, a `String` is guaranteed to be
-  decoded. Which you should use depends on whether you want direct but
-  potentially unsafe access to the string (`&RawStr`), or safe access to the
-  string at the cost of an allocation (`String`).
-
-  [`RawStr`]: @api/rocket/http/struct.RawStr.html
+<!-- ! note: Rocket types _raw_ strings separately from decoded strings. -->
+<!--  -->
+<!--   You may have noticed an unfamiliar [`RawStr`] type in the code example above. -->
+<!--   This is a special type, provided by Rocket, that represents an unsanitized, -->
+<!--   unvalidated, and undecoded raw string from an HTTP message. It exists to -->
+<!--   separate validated string inputs, represented by types such as `String`, -->
+<!--   `&str`, and `Cow<str>`, from unvalidated inputs, represented by `&RawStr`. It -->
+<!--   also provides helpful methods to convert the unvalidated string into a -->
+<!--   validated one. -->
+<!--  -->
+<!--   Because `&RawStr` implements [`FromParam`], it can be used as the type of a -->
+<!--   dynamic segment, as in the example above, where the value refers to a -->
+<!--   potentially undecoded string. By contrast, a `String` is guaranteed to be -->
+<!--   decoded. Which you should use depends on whether you want direct but -->
+<!--   potentially unsafe access to the string (`&RawStr`), or safe access to the -->
+<!--   string at the cost of an allocation (`String`). -->
+<!--  -->
+<!--   [`RawStr`]: @api/rocket/http/struct.RawStr.html -->
+<!--  -->
 
 ### Multiple Segments
 
@@ -210,8 +209,6 @@ routes:
 ```rust
 # #[macro_use] extern crate rocket;
 
-# use rocket::http::RawStr;
-
 #[get("/user/<id>")]
 fn user(id: usize) { /* ... */ }
 
@@ -219,7 +216,7 @@ fn user(id: usize) { /* ... */ }
 fn user_int(id: isize) { /* ... */ }
 
 #[get("/user/<id>", rank = 3)]
-fn user_str(id: &RawStr) { /* ... */ }
+fn user_str(id: &str) { /* ... */ }
 
 #[launch]
 fn rocket() -> rocket::Rocket {
@@ -248,7 +245,7 @@ will be routed as follows:
   `GET /user/<id> [3] (user_str)`.
 
 Forwards can be _caught_ by using a `Result` or `Option` type. For example, if
-the type of `id` in the `user` function was `Result<usize, &RawStr>`, then `user`
+the type of `id` in the `user` function was `Result<usize, &str>`, then `user`
 would never forward. An `Ok` variant would indicate that `<id>` was a valid
 `usize`, while an `Err` would indicate that `<id>` was not a `usize`. The
 `Err`'s value would contain the string that failed to parse as a `usize`.
@@ -289,11 +286,9 @@ segments:
 # #[macro_use] extern crate rocket;
 # fn main() {}
 
-# use rocket::http::RawStr;
-
 #[get("/hello?wave&<name>")]
-fn hello(name: &RawStr) -> String {
-    format!("Hello, {}!", name.as_str())
+fn hello(name: &str) -> String {
+    format!("Hello, {}!", name)
 }
 ```
 
@@ -354,15 +349,9 @@ customized for your own types that implement `FromFormValue` by implementing
 
 As with paths, you can also match against multiple segments in a query by using
 `<param..>`. The type of such parameters, known as _query guards_, must
-implement the [`FromQuery`] trait. Query guards must be the final component of a
-query: any text after a query parameter will result in a compile-time error.
-
-A query guard validates all otherwise unmatched (by static or dynamic query
-parameters) query segments. While you can implement [`FromQuery`] yourself, most
-use cases will be handled by using the [`Form`] or [`LenientForm`] query guard.
-The [Forms](#forms) section explains using these types in detail. In short,
-these types allow you to use a structure with named fields to automatically
-validate query/form parameters:
+implement the [`FromForm`] trait. Query guards must be the final component of a
+query: any text after a query parameter will result in a compile-time error. The
+[Forms](#forms) section explains deriving [`FromForm`] in detail.
 
 ```rust
 # #[macro_use] extern crate rocket;
@@ -377,7 +366,7 @@ struct User {
 }
 
 #[get("/item?<id>&<user..>")]
-fn item(id: usize, user: Form<User>) { /* ... */ }
+fn item(id: usize, user: User) { /* ... */ }
 ```
 
 For a request to `/item?id=100&name=sandal&account=400`, the `item` route above
@@ -392,7 +381,7 @@ catch forms that fail to validate, use a type of `Option` or `Result`:
 # #[derive(FromForm)] struct User { name: String, account: usize, }
 
 #[get("/item?<id>&<user..>")]
-fn item(id: usize, user: Option<Form<User>>) { /* ... */ }
+fn item(id: usize, user: Option<User>) { /* ... */ }
 ```
 
 For more query handling examples, see [the `query_params`
@@ -840,18 +829,18 @@ Rocket's `FromForm` parsing is _lenient_ by default: a `Form<T>` will parse
 successfully from an incoming form even if it contains extra or duplicate
 fields. The extras or duplicates are ignored -- no validation or parsing of the
 fields occurs. To change this behavior and make form parsing _strict_, use the
-[`StrictForm`] data type, which errors if there are any extra, undeclared
+[`Form<Strict<T>>`] data type, which errors if there are any extra, undeclared
 fields.
 
-You can use a `StrictForm` anywhere you'd use a `Form`. Its generic parameter is
-also required to implement `FromForm`. For instance, we can simply replace
-`Form` with `StrictForm` above to get strict parsing:
+You can use a `Form<Strict<T>>` anywhere you'd use a `Form<T>`. Its generic
+parameter is also required to implement `FromForm`. For instance, we can simply
+replace `Form<T>` with `Form<Strict<T>>` above to get strict parsing:
 
 ```rust
 # #[macro_use] extern crate rocket;
 # fn main() {}
 
-use rocket::form::StrictForm;
+use rocket::form::{Form, Strict};
 
 #[derive(FromForm)]
 struct Task {
@@ -861,10 +850,10 @@ struct Task {
 }
 
 #[post("/todo", data = "<task>")]
-fn new(task: StrictForm<Task>) { /* .. */ }
+fn new(task: Form<Strict<Task>>) { /* .. */ }
 ```
 
-[`StrictForm`]: @api/rocket/request/struct.StrictForm.html
+[`Form<Strict<T>>`]: @api/rocket/form/struct.Strict.html
 
 #### Field Renaming
 
@@ -946,12 +935,10 @@ Luhn validator for credit-card-like numbers, you might write:
 # #[macro_use] extern crate rocket;
 extern crate time;
 
-use rocket::http::RawStr;
-
 #[derive(FromForm)]
 struct CreditCard<'v> {
     #[field(validate = luhn())]
-    number: &'v RawStr,
+    number: &'v str,
     # #[field(validate = luhn())]
     # other: String,
     #[field(validate = range(..9999))]
@@ -1058,7 +1045,7 @@ Such a form, URL-encoded, may look like:
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{assert_form_parses, assert_not_form_parses};
 # #[derive(FromForm, Debug, PartialEq)] struct MyForm { owner: Person, pet: Pet, }
-# #[derive(FromForm, Debug, PartialEq)] struct Person { name: String } 
+# #[derive(FromForm, Debug, PartialEq)] struct Person { name: String }
 # #[derive(FromForm, Debug, PartialEq)] struct Pet { name: String, good_pet: bool, }
 
 # assert_form_parses! { MyForm,
@@ -1089,7 +1076,7 @@ place of or in addition to `.`:
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{assert_form_parses, assert_not_form_parses};
 # #[derive(FromForm, Debug, PartialEq)] struct MyForm { owner: Person, pet: Pet, }
-# #[derive(FromForm, Debug, PartialEq)] struct Person { name: String } 
+# #[derive(FromForm, Debug, PartialEq)] struct Person { name: String }
 # #[derive(FromForm, Debug, PartialEq)] struct Pet { name: String, good_pet: bool, }
 
 // All of these are identical to the previous...
@@ -1293,10 +1280,10 @@ As an example, the following are equivalent and all parse to `{ "a" => 1, "b" =>
 
 ```rust
 # use std::collections::HashMap;
-# 
+#
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{map, assert_form_parses};
-# 
+#
 # #[derive(Debug, PartialEq, FromForm)]
 # struct MyForm {
 #     ids: HashMap<String, usize>,
@@ -1348,12 +1335,12 @@ Examples include:
 
 ```rust
 # use std::collections::HashMap;
-# 
+#
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{map, assert_form_parses};
-# 
+#
 
-# #[derive(FromForm, Debug, PartialEq)] struct MyForm { ids: HashMap<usize, Person>, } 
+# #[derive(FromForm, Debug, PartialEq)] struct MyForm { ids: HashMap<usize, Person>, }
 # #[derive(FromForm, Debug, PartialEq)] struct Person { name: String, age: usize }
 
 // These form strings...
@@ -1423,10 +1410,10 @@ Examples include:
 
 ```rust
 # use std::collections::HashMap;
-# 
+#
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{map, assert_form_parses};
-# 
+#
 
 # #[derive(FromForm, Debug, PartialEq)] struct MyForm { m: HashMap<Person, Pet>, }
 # #[derive(FromForm, Debug, PartialEq, Eq, Hash)] struct Person { name: String, age: usize }
@@ -1480,7 +1467,7 @@ struct Person {
     age: usize
 }
 
-# type Foo = 
+# type Foo =
 HashMap<Vec<BTreeMap<Person, usize>>, HashMap<usize, Person>>
 # ;
 # /*
@@ -1515,7 +1502,7 @@ Where we have the following symbolic keys:
 ```rust
 # use std::collections::BTreeMap;
 # use std::collections::HashMap;
-# 
+#
 # use rocket::form::FromForm;
 # use rocket_guide_tests::{map, bmap, assert_form_parses};
 # #[derive(FromForm, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -1564,16 +1551,17 @@ previously submitted values and render errors associated with a form input.
 To retrieve the context for a form, use `Result<T, Context<'_>>` as a data
 guard, where `T` implements `FromForm`:
 
-```rust
-# type T = String;
-
-use rocket::form::Context;
-
-#[post("/submit", data = "<form>")]
-fn submit(form: Result<T, Context<'_>>) -> String {
-    format!("form context: {:?}", form)
-}
-```
+<!-- ```rust -->
+<!-- # use rocket::post; -->
+<!-- # type T = String; -->
+<!--  -->
+<!-- use rocket::form::Context; -->
+<!--  -->
+<!-- #[post("/submit", data = "<form>")] -->
+<!-- fn submit(form: Result<T, Context<'_>>) -> String { -->
+<!--     format!("form context: {:?}", form) -->
+<!-- } -->
+<!-- ``` -->
 
 [`Context`]: @api/rocket/form/struct.Context.html
 

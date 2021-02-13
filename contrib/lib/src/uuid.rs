@@ -22,7 +22,6 @@ use std::ops::Deref;
 
 use rocket::request::FromParam;
 use rocket::form::{self, FromFormField, Errors, ValueField};
-use rocket::http::RawStr;
 
 type ParseError = <self::uuid_crate::Uuid as FromStr>::Err;
 
@@ -105,7 +104,7 @@ impl<'a> FromParam<'a> for Uuid {
     /// A value is successfully parsed if `param` is a properly formatted Uuid.
     /// Otherwise, a `ParseError` is returned.
     #[inline(always)]
-    fn from_param(param: &'a RawStr) -> Result<Uuid, Self::Error> {
+    fn from_param(param: &'a str) -> Result<Uuid, Self::Error> {
         param.parse()
     }
 }

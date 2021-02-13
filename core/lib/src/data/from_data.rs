@@ -1,5 +1,5 @@
-use crate::http::Status;
-use crate::request::Request;
+use crate::http::{RawStr, Status};
+use crate::request::{Request, local_cache};
 use crate::data::{Data, Limits};
 use crate::outcome::{self, IntoOutcome, Outcome::*};
 
@@ -29,15 +29,29 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
     }
 }
 
-/// A variant of [`FromTransformedData`] for data guards that don't require
-/// transformations.
+/// Trait implemented by data guards to derive a value from request body data.
 ///
-/// When transformation of incoming data isn't required, data guards should
-/// implement this trait instead of [`FromTransformedData`]. Any type that
-/// implements `FromData` automatically implements `FromTransformedData`. For a
-/// description of data guards, see the [`FromTransformedData`] documentation.
+/// # Data Guards
 ///
-/// [`FromTransformedData`]: crate::data::FromTransformedData
+/// A data guard is a [request guard] that operates on a request's body data.
+/// Data guards validate and parse request body data via implementations of `FromData`.
+/// In other words, every type that implements `FromData` is a data guard and
+/// vice-versa.
+///
+/// Data guards are the target of the `data` route attribute parameter:
+///
+/// ```rust
+/// # #[macro_use] extern crate rocket;
+/// # type DataGuard = rocket::data::Data;
+/// #[post("/submit", data = "<var>")]
+/// fn submit(var: DataGuard) { /* ... */ }
+/// # fn main() { }
+/// ```
+///
+/// A route can have at most one data guard. Above, `var` is used as the
+/// argument name for the data guard type `DataGuard`. When the `submit` route
+/// matches, Rocket will call the `FromData` implementation for the type `T`.
+/// The handler will only be called if the guard returns successfully.
 ///
 /// ## Async Trait
 ///
@@ -51,10 +65,10 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// # type MyError = String;
 ///
 /// #[rocket::async_trait]
-/// impl FromData for MyType {
+/// impl<'r> FromData<'r> for MyType {
 ///     type Error = MyError;
 ///
-///     async fn from_data(req: &Request<'_>, data: Data) -> data::Outcome<Self, MyError> {
+///     async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, MyError> {
 ///         /* .. */
 ///         # unimplemented!()
 ///     }
@@ -66,23 +80,23 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// Say that you have a custom type, `Person`:
 ///
 /// ```rust
-/// struct Person {
-///     name: String,
+/// struct Person<'r> {
+///     name: &'r str,
 ///     age: u16
 /// }
 /// ```
 ///
 /// `Person` has a custom serialization format, so the built-in `Json` type
 /// doesn't suffice. The format is `<name>:<age>` with `Content-Type:
-/// application/x-person`. You'd like to use `Person` as a `FromTransformedData`
-/// type, or equivalently `FromData`, so that you can retrieve it directly from
-/// a client's request body:
+/// application/x-person`. You'd like to use `Person` as a `FromData` type, or
+/// equivalently `FromData`, so that you can retrieve it directly from a
+/// client's request body:
 ///
 /// ```rust
 /// # use rocket::post;
-/// # type Person = rocket::data::Data;
+/// # type Person<'r> = &'r rocket::http::RawStr;
 /// #[post("/person", data = "<person>")]
-/// fn person(person: Person) -> &'static str {
+/// fn person(person: Person<'_>) -> &'static str {
 ///     "Saved the new person to the database!"
 /// }
 /// ```
@@ -93,10 +107,10 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// # #[macro_use] extern crate rocket;
 /// #
 /// # #[derive(Debug)]
-/// # struct Person { name: String, age: u16 }
+/// # struct Person<'r> { name: &'r str, age: u16 }
 /// #
-/// use rocket::{Request, Data};
-/// use rocket::data::{self, FromData, ToByteUnit};
+/// use rocket::request::{self, Request};
+/// use rocket::data::{self, Data, FromData, ToByteUnit};
 /// use rocket::http::{Status, ContentType};
 ///
 /// enum Error {
@@ -107,10 +121,10 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// }
 ///
 /// #[rocket::async_trait]
-/// impl FromData for Person {
+/// impl<'r> FromData<'r> for Person<'r> {
 ///     type Error = Error;
 ///
-///     async fn from_data(req: &Request<'_>, data: Data) -> data::Outcome<Self, Error> {
+///     async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, Error> {
 ///         use Error::*;
 ///         use rocket::outcome::Outcome::*;
 ///
@@ -125,14 +139,17 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///
 ///         // Read the data into a string.
 ///         let string = match data.open(limit).into_string().await {
-///             Ok(string) if string.is_complete() => string.value,
+///             Ok(string) if string.is_complete() => string.into_inner(),
 ///             Ok(_) => return Failure((Status::PayloadTooLarge, TooLarge)),
 ///             Err(e) => return Failure((Status::InternalServerError, Io(e))),
 ///         };
 ///
+///         // We store the str in request-local cache for long-lived borrows.
+///         let string = request::local_cache!(req, string);
+///
 ///         // Split the string into two pieces at ':'.
 ///         let (name, age) = match string.find(':') {
-///             Some(i) => (string[..i].to_string(), &string[(i + 1)..]),
+///             Some(i) => (&string[..i], &string[(i + 1)..]),
 ///             None => return Failure((Status::UnprocessableEntity, NoColon)),
 ///         };
 ///
@@ -149,13 +166,19 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// // The following routes are now possible...
 ///
 /// #[post("/person", data = "<person>")]
-/// fn person(person: Person) { /* .. */ }
+/// fn person(person: Person<'_>) { /* .. */ }
 ///
 /// #[post("/person", data = "<person>")]
-/// fn person2(person: Result<Person, Error>) { /* .. */ }
+/// fn person2(person: Result<Person<'_>, Error>) { /* .. */ }
 ///
 /// #[post("/person", data = "<person>")]
-/// fn person3(person: Option<Person>) { /* .. */ }
+/// fn person3(person: Option<Person<'_>>) { /* .. */ }
+///
+/// #[post("/person", data = "<person>")]
+/// fn person4(person: Person<'_>) -> &str {
+///     person.name
+/// }
+///
 /// # fn main() {  }
 /// ```
 #[crate::async_trait]
@@ -185,6 +208,19 @@ impl<'r> FromData<'r> for Capped<String> {
 }
 
 impl_strict_from_data_from_capped!(String);
+
+#[crate::async_trait]
+impl<'r> FromData<'r> for Capped<&'r RawStr> {
+    type Error = std::io::Error;
+
+    async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
+        let capped = try_outcome!(<Capped<String>>::from_data(req, data).await);
+        let raw = capped.map(|s| RawStr::new(local_cache!(req, s)));
+        Success(raw)
+    }
+}
+
+impl_strict_from_data_from_capped!(&'r RawStr);
 
 #[crate::async_trait]
 impl<'r> FromData<'r> for Capped<std::borrow::Cow<'_, str>> {

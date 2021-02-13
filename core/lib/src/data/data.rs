@@ -106,10 +106,13 @@ impl Data {
     /// # type MyError = String;
     ///
     /// #[rocket::async_trait]
-    /// impl FromData for MyType {
+    /// impl<'r> FromData<'r> for MyType {
     ///     type Error = MyError;
     ///
-    ///     async fn from_data(req: &Request<'_>, mut data: Data) -> data::Outcome<Self, MyError> {
+    ///     async fn from_data(
+    ///         req: &'r Request<'_>,
+    ///         mut data: Data
+    ///     ) -> data::Outcome<Self, Self::Error> {
     ///         if data.peek(2).await != b"hi" {
     ///             return data::Outcome::Forward(data)
     ///         }

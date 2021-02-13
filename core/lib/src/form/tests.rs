@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::form::*;
-use crate::http::RawStr;
 
 fn parse<'v, T: FromForm<'v>>(values: &[&'v str]) -> Result<'v, T> {
     let mut context = T::init(Options::Lenient);
@@ -53,36 +52,34 @@ fn potpourri() {
         &["a.b=10"] => usize = 10,
         &["a=10"] => u8 = 10,
         &["=10"] => u8 = 10,
-        &["=5", "=3", "=4"] => Vec<&RawStr> = vec!["5", "3", "4"],
-        &["5", "3", "4"] => Vec<&RawStr> = vec!["5", "3", "4"],
+        &["=5", "=3", "=4"] => Vec<&str> = vec!["5", "3", "4"],
         &["a=3", "b=4", "c=5"] => Vec<u8> = vec![3, 4, 5],
         &["=3", "=4", "=5"] => Vec<u8> = vec![3, 4, 5],
         &["=3", "=4", "=5"] => Vec<Vec<u8>> = vec![vec![3], vec![4], vec![5]],
-        &["3", "4", "5"] => Vec<Vec<u8>> = vec![vec![3], vec![4], vec![5]],
         &["[]=3", "[]=4", "[]=5"] => Vec<Vec<u8>> = vec![vec![3], vec![4], vec![5]],
         &["[][]=3", "[][]=4", "[][]=5"] => Vec<Vec<u8>> = vec![vec![3], vec![4], vec![5]],
-        &["[]=5", "[]=3", "[]=4"] => Vec<&RawStr> = vec!["5", "3", "4"],
-        &["[0]=5", "[0]=3", "=4", "6"] => Vec<Vec<u8>>
+        &["[]=5", "[]=3", "[]=4"] => Vec<&str> = vec!["5", "3", "4"],
+        &["[0]=5", "[0]=3", "=4", "=6"] => Vec<Vec<u8>>
             = vec![vec![5, 3], vec![4], vec![6]],
         &[".0=5", ".1=3"] => (u8, usize) = (5, 3),
         &["0=5", "1=3"] => (u8, usize) = (5, 3),
-        &["[bob]=Robert", ".j=Jack", "s=Stan", "[s]=Steve"] => HashMap<&RawStr, &RawStr>
+        &["[bob]=Robert", ".j=Jack", "s=Stan", "[s]=Steve"] => HashMap<&str, &str>
             = map!["bob" => "Robert", "j" => "Jack", "s" => "Stan"],
         &["[bob]=Robert", ".j=Jack", "s=Stan", "[s]=Steve"]
-            => HashMap<&RawStr, Vec<&RawStr>>
+            => HashMap<&str, Vec<&str>>
             = map![
                 "bob" => vec!["Robert"],
                 "j" => vec!["Jack"],
                 "s" => vec!["Stan", "Steve"]
             ],
-        &["[k:0]=5", "[k:0]=3", "[v:0]=20", "[56]=2"] => HashMap<Vec<&RawStr>, usize>
+        &["[k:0]=5", "[k:0]=3", "[v:0]=20", "[56]=2"] => HashMap<Vec<&str>, usize>
             = map![vec!["5", "3"] => 20u8, vec!["56"] => 2u8],
-        &["[k:0]=5", "[k:0]=3", "[0]=20", "[56]=2"] => HashMap<Vec<&RawStr>, usize>
+        &["[k:0]=5", "[k:0]=3", "[0]=20", "[56]=2"] => HashMap<Vec<&str>, usize>
             = map![vec!["5", "3"] => 20u8, vec!["56"] => 2u8],
         &[
             "[k:a]0=5", "[a]=hi", "[v:b][0]=10", "[k:b].0=1",
             "[k:b].1=hi", "[a]=hey", "[k:a]1=3"
-        ] => HashMap<(usize, &RawStr), Vec<&RawStr>>
+        ] => HashMap<(usize, &str), Vec<&str>>
             = map![
                 (5, "3".into()) => vec!["hi", "hey"],
                 (1, "hi".into()) => vec!["10"]
@@ -90,7 +87,7 @@ fn potpourri() {
         &[
             "[0][hi]=10", "[0][hey]=12", "[1][bob]=0", "[1].blam=58", "[].0=1",
             "[].whoops=999",
-        ] => Vec<HashMap<&RawStr, usize>>
+        ] => Vec<HashMap<&str, usize>>
             = vec![
                 map!["hi" => 10u8, "hey" => 12u8],
                 map!["bob" => 0u8, "blam" => 58u8],

@@ -48,14 +48,13 @@ use crate::http::uri::{Segments, PathError};
 ///
 /// For instance, imagine you've asked for an `<id>` as a `usize`. To determine
 /// when the `<id>` was not a valid `usize` and retrieve the string that failed
-/// to parse, you can use a `Result<usize, &RawStr>` type for the `<id>`
-/// parameter as follows:
+/// to parse, you can use a `Result<usize, &str>` type for the `<id>` parameter
+/// as follows:
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
-/// # use rocket::http::RawStr;
 /// #[get("/<id>")]
-/// fn hello(id: Result<usize, &RawStr>) -> String {
+/// fn hello(id: Result<usize, &str>) -> String {
 ///     match id {
 ///         Ok(id_num) => format!("usize: {}", id_num),
 ///         Err(string) => format!("Not a usize: {}", string)
@@ -81,12 +80,6 @@ use crate::http::uri::{Segments, PathError};
 ///     A value is parsed successfully if the `from_str` method from the given
 ///     type returns successfully. Otherwise, the raw path segment is returned
 ///     in the `Err` value.
-///
-///   * **[`&RawStr`](RawStr)**
-///
-///     _This implementation always returns successfully._
-///
-///     The path segment is passed directly with no modification.
 ///
 ///   * **String**
 ///
@@ -138,19 +131,17 @@ use crate::http::uri::{Segments, PathError};
 ///
 /// ```rust
 /// use rocket::request::FromParam;
-/// use rocket::http::RawStr;
 /// # #[allow(dead_code)]
 /// # struct MyParam<'r> { key: &'r str, value: usize }
 ///
 /// impl<'r> FromParam<'r> for MyParam<'r> {
-///     type Error = &'r RawStr;
+///     type Error = &'r str;
 ///
-///     fn from_param(param: &'r RawStr) -> Result<Self, Self::Error> {
+///     fn from_param(param: &'r str) -> Result<Self, Self::Error> {
 ///         // We can convert `param` into a `str` since we'll check every
 ///         // character for safety later.
-///         let param_str = param.as_str();
-///         let (key, val_str) = match param_str.find(':') {
-///             Some(i) if i > 0 => (&param_str[..i], &param_str[(i + 1)..]),
+///         let (key, val_str) = match param.find(':') {
+///             Some(i) if i > 0 => (&param[..i], &param[(i + 1)..]),
 ///             _ => return Err(param)
 ///         };
 ///
@@ -171,12 +162,11 @@ use crate::http::uri::{Segments, PathError};
 /// ```rust
 /// # #[macro_use] extern crate rocket;
 /// # use rocket::request::FromParam;
-/// # use rocket::http::RawStr;
 /// # #[allow(dead_code)]
 /// # struct MyParam<'r> { key: &'r str, value: usize }
 /// # impl<'r> FromParam<'r> for MyParam<'r> {
-/// #     type Error = &'r RawStr;
-/// #     fn from_param(param: &'r RawStr) -> Result<Self, Self::Error> {
+/// #     type Error = &'r str;
+/// #     fn from_param(param: &'r str) -> Result<Self, Self::Error> {
 /// #         Err(param)
 /// #     }
 /// # }

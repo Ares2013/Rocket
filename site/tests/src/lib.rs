@@ -22,7 +22,7 @@ macro_rules! bmap {
 #[macro_export]
 macro_rules! assert_form_parses {
     ($T:ty, $form:expr => $value:expr) => (
-        let v = rocket::form::Form::<$T>::parse_url_encoded($form).unwrap();
+        let v = rocket::form::Form::<$T>::parse($form).unwrap();
         assert_eq!(v, $value, "{}", $form);
     );
 
@@ -38,13 +38,13 @@ macro_rules! assert_form_parses {
 #[macro_export]
 macro_rules! assert_not_form_parses {
     ($T:ty, $($form:expr),* $(,)?) => ($(
-        rocket::form::Form::<$T>::parse_url_encoded($form).unwrap_err();
+        rocket::form::Form::<$T>::parse($form).unwrap_err();
     )*);
 }
 
 #[macro_export]
 macro_rules! assert_form_parses_ok {
     ($T:ty, $($form:expr),* $(,)?) => ($(
-        rocket::form::Form::<$T>::parse_url_encoded($form).expect("form to parse");
+        rocket::form::Form::<$T>::parse($form).expect("form to parse");
     )*);
 }

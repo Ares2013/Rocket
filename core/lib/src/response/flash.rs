@@ -52,10 +52,9 @@ const FLASH_COOKIE_DELIM: char = ':';
 /// # #[macro_use] extern crate rocket;
 /// use rocket::response::{Flash, Redirect};
 /// use rocket::request::FlashMessage;
-/// use rocket::http::RawStr;
 ///
 /// #[post("/login/<name>")]
-/// fn login(name: &RawStr) -> Result<&'static str, Flash<Redirect>> {
+/// fn login(name: &str) -> Result<&'static str, Flash<Redirect>> {
 ///     if name == "special_user" {
 ///         Ok("Hello, special user!")
 ///     } else {

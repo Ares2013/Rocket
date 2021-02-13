@@ -3,7 +3,6 @@ use std::{borrow::Cow, convert::TryInto, fmt::Display, ops::{RangeBounds, Bound}
 use rocket_http::ContentType;
 
 use crate::{data::TempFile, form::error::{Error, Errors}};
-use crate::http::RawStr;
 
 pub fn eq<'v, A, B>(a: &A, b: B) -> Result<(), Errors<'v>>
     where A: PartialEq<B>
@@ -23,22 +22,12 @@ pub trait Len {
     }
 }
 
-macro_rules! impl_len_for {
-    ($($T:ty),*) => {$(
-        impl Len for $T {
-            fn len(&self) -> usize { <$T>::len(self) }
-        }
-    )*};
+impl Len for str {
+    fn len(&self) -> usize { self.len() }
 }
 
-impl_len_for!(String, str);
-
-impl Len for RawStr {
-    fn len(&self) -> usize { self.as_str().len() }
-}
-
-impl Len for &RawStr {
-    fn len(&self) -> usize { self.as_str().len() }
+impl Len for String {
+    fn len(&self) -> usize { self.len() }
 }
 
 impl<T> Len for Vec<T> {
@@ -55,7 +44,7 @@ impl<K, V> Len for std::collections::HashMap<K, V> {
     fn len(&self) -> usize { <std::collections::HashMap<K, V>>::len(self) }
 }
 
-impl<T: Len> Len for &T {
+impl<T: Len + ?Sized> Len for &T {
     fn len(&self) -> usize {
         <T as Len>::len(self)
     }
@@ -99,33 +88,9 @@ impl Contains<&str> for String {
     }
 }
 
-impl Contains<&&str> for String {
-    fn contains(&self, string: &&str) -> bool {
-        <str>::contains(self, string)
-    }
-}
-
-impl Contains<&RawStr> for String {
-    fn contains(&self, string: &RawStr) -> bool {
-        <str>::contains(self, string.as_str())
-    }
-}
-
-impl Contains<&&RawStr> for String {
-    fn contains(&self, string: &&RawStr) -> bool {
-        <str>::contains(self, string.as_str())
-    }
-}
-
 impl Contains<char> for String {
     fn contains(&self, c: char) -> bool {
         <str>::contains(self, c)
-    }
-}
-
-impl Contains<&char> for String {
-    fn contains(&self, c: &char) -> bool {
-        <str>::contains(self, *c)
     }
 }
 
@@ -138,6 +103,18 @@ impl<T: PartialEq> Contains<T> for Vec<T> {
 impl<T: PartialEq> Contains<&T> for Vec<T> {
     fn contains(&self, item: &T) -> bool {
         <[T]>::contains(self, item)
+    }
+}
+
+impl Contains<&&str> for String {
+    fn contains(&self, string: &&str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<&char> for String {
+    fn contains(&self, c: &char) -> bool {
+        <str>::contains(self, *c)
     }
 }
 

@@ -35,7 +35,7 @@ pub struct Segments<'o> {
     pub(super) pos: usize,
 }
 
-/// An interpreting a segment as a valid [`PathBuf`] segment in
+/// An error interpreting a segment as a [`PathBuf`] component in
 /// [`Segments::to_path_buf()`].
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PathError {
@@ -172,7 +172,6 @@ impl<'o> QuerySegments<'o> {
         let val = val.from_source(source);
         Some((name, val))
     }
-
 }
 
 impl<'o> Iterator for QuerySegments<'o> {

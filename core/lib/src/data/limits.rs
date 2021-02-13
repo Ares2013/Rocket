@@ -111,10 +111,10 @@ use crate::http::uncased::Uncased;
 /// # struct MyType;
 /// # type MyError = ();
 /// #[rocket::async_trait]
-/// impl FromData for MyType {
+/// impl<'r> FromData<'r> for MyType {
 ///     type Error = MyError;
 ///
-///     async fn from_data(req: &Request<'_>, data: Data) -> data::Outcome<Self, MyError> {
+///     async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, MyError> {
 ///         let limit = req.limits().get("my-data-type");
 ///         /* .. */
 ///         # unimplemented!()

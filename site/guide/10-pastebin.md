@@ -201,11 +201,10 @@ an `upload` directory next to the `src` directory:
 mkdir upload
 ```
 
-For the `upload` route, we'll need to `use` a few items:
+For the `upload` route, we'll need to import `Data`:
 
 ```rust
 use rocket::Data;
-use rocket::http::RawStr;
 ```
 
 The [Data](@api/rocket/data/struct.Data.html) structure is key
@@ -322,11 +321,10 @@ paste doesn't exist.
 ```rust
 # #[macro_use] extern crate rocket;
 
-use rocket::http::RawStr;
 use rocket::tokio::fs::File;
 
 #[get("/<id>")]
-async fn retrieve(id: &RawStr) -> Option<File> {
+async fn retrieve(id: &str) -> Option<File> {
     let filename = format!("upload/{id}", id = id);
     File::open(&filename).await.ok()
 }
@@ -348,7 +346,7 @@ fn rocket() -> rocket::Rocket {
 ```
 
 Unfortunately, there's a problem with this code. Can you spot the issue? The
-[`RawStr`](@api/rocket/http/struct.RawStr.html) type should tip you off!
+`&str` type should tip you off!
 
 The issue is that the _user_ controls the value of `id`, and as a result, can
 coerce the service into opening files inside `upload/` that aren't meant to be
@@ -370,7 +368,6 @@ using it. We do this by implementing `FromParam` for `PasteId` in
 ```rust
 use std::borrow::Cow;
 
-use rocket::http::RawStr;
 use rocket::request::FromParam;
 
 /// A _probably_ unique paste ID.
@@ -379,11 +376,11 @@ pub struct PasteId<'a>(Cow<'a, str>);
 /// Returns an instance of `PasteId` if the path segment is a valid ID.
 /// Otherwise returns the invalid ID as the `Err` value.
 impl<'a> FromParam<'a> for PasteId<'a> {
-    type Error = &'a RawStr;
+    type Error = &'a str;
 
-    fn from_param(param: &'a RawStr) -> Result<Self, Self::Error> {
-        match param.as_str().chars().all(|c| c.is_ascii_alphanumeric()) {
-            true => Ok(PasteId(Cow::Borrowed(param.as_str()))),
+    fn from_param(param: &'a str) -> Result<Self, Self::Error> {
+        match param.chars().all(|c| c.is_ascii_alphanumeric()) {
+            true => Ok(PasteId(param.into())),
             false => Err(param)
         }
     }
@@ -400,7 +397,7 @@ the `retrieve` route, preventing attacks on the `retrieve` route:
 # use std::borrow::Cow;
 # use rocket::tokio::fs::File;
 
-# type PasteId<'a> = Cow<'a, str>;
+# type PasteId<'a> = &'a str;
 
 #[get("/<id>")]
 async fn retrieve(id: PasteId<'_>) -> Option<File> {

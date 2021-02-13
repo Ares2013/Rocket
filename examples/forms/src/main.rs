@@ -2,7 +2,6 @@
 
 use rocket::form::{Form, FromForm, FromFormField, Context};
 use rocket::data::TempFile;
-use rocket::http::RawStr;
 
 use rocket_contrib::serve::{StaticFiles, crate_relative};
 use rocket_contrib::templates::Template;
@@ -10,9 +9,9 @@ use rocket_contrib::templates::Template;
 #[derive(Debug, FromForm)]
 struct Password<'v> {
     #[field(validate = len(6..))]
-    first: &'v RawStr,
+    first: &'v str,
     #[field(validate = eq(self.first))]
-    second: &'v RawStr,
+    second: &'v str,
 }
 
 #[derive(Debug, FromFormField)]

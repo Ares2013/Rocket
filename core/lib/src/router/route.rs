@@ -229,10 +229,10 @@ impl Route {
     /// let index = Route::new(Method::Get, "/foo/bar?a=1", handler);
     /// let index = index.map_base(|base| format!("{}{}", "/boo", base)).unwrap();
     /// assert_eq!(index.uri.path(), "/boo/foo/bar");
-    /// assert_eq!(index.uri.query(), Some("a=1"));
+    /// assert_eq!(index.uri.query().unwrap(), "a=1");
     /// assert_eq!(index.base(), "/boo");
     /// assert_eq!(index.path().path(), "/foo/bar");
-    /// assert_eq!(index.path().query(), Some("a=1"));
+    /// assert_eq!(index.path().query().unwrap(), "a=1");
     /// ```
     #[inline]
     pub fn path(&self) -> &Origin<'_> {

@@ -164,7 +164,7 @@ impl<'r> Request<'r> {
     /// let uri = Origin::parse("/hello/Sergio?type=greeting").unwrap();
     /// request.set_uri(uri);
     /// assert_eq!(request.uri().path(), "/hello/Sergio");
-    /// assert_eq!(request.uri().query(), Some("type=greeting"));
+    /// assert_eq!(request.uri().query().unwrap(), "type=greeting");
     /// # });
     /// ```
     pub fn set_uri<'u: 'r>(&mut self, uri: Origin<'u>) {
@@ -615,10 +615,10 @@ impl<'r> Request<'r> {
     ///
     /// ```rust
     /// # use rocket::{Request, http::Method};
-    /// use rocket::http::{RawStr, uri::Origin};
+    /// use rocket::http::uri::Origin;
     ///
     /// # Request::example(Method::Get, "/", |req| {
-    /// fn string<'s>(req: &'s mut Request, uri: &'static str, n: usize) -> &'s RawStr {
+    /// fn string<'s>(req: &'s mut Request, uri: &'static str, n: usize) -> &'s str {
     ///     req.set_uri(Origin::parse(uri).unwrap());
     ///
     ///     req.param(n)
@@ -626,12 +626,12 @@ impl<'r> Request<'r> {
     ///         .unwrap_or("unnamed".into())
     /// }
     ///
-    /// assert_eq!(string(req, "/", 0).as_str(), "unnamed");
-    /// assert_eq!(string(req, "/a/b/this_one", 0).as_str(), "a");
-    /// assert_eq!(string(req, "/a/b/this_one", 1).as_str(), "b");
-    /// assert_eq!(string(req, "/a/b/this_one", 2).as_str(), "this_one");
-    /// assert_eq!(string(req, "/a/b/this_one", 3).as_str(), "unnamed");
-    /// assert_eq!(string(req, "/a/b/c/d/e/f/g/h", 7).as_str(), "h");
+    /// assert_eq!(string(req, "/", 0), "unnamed");
+    /// assert_eq!(string(req, "/a/b/this_one", 0), "a");
+    /// assert_eq!(string(req, "/a/b/this_one", 1), "b");
+    /// assert_eq!(string(req, "/a/b/this_one", 2), "this_one");
+    /// assert_eq!(string(req, "/a/b/this_one", 3), "unnamed");
+    /// assert_eq!(string(req, "/a/b/c/d/e/f/g/h", 7), "h");
     /// # });
     /// ```
     #[inline]
@@ -665,7 +665,7 @@ impl<'r> Request<'r> {
     /// fn path<'s>(req: &'s mut Request, uri: &'static str, n: usize) -> PathBuf {
     ///     req.set_uri(Origin::parse(uri).unwrap());
     ///
-    ///     req.get_segments(n..)
+    ///     req.segments(n..)
     ///         .and_then(|r| r.ok())
     ///         .unwrap_or_else(|| "whoops".into())
     /// }
@@ -682,6 +682,7 @@ impl<'r> Request<'r> {
     pub fn segments<'a, T>(&'a self, n: RangeFrom<usize>) -> Option<Result<T, T::Error>>
         where T: FromSegments<'a>
     {
+        // FIXME: https://github.com/SergioBenitez/Rocket/issues/985.
         let segments = self.routed_segments(n);
         if segments.is_empty() {
             None
@@ -708,23 +709,23 @@ impl<'r> Request<'r> {
     /// ```rust
     /// # use rocket::{Request, http::Method};
     /// use std::path::PathBuf;
-    /// use rocket::http::{RawStr, uri::Origin};
+    /// use rocket::http::uri::Origin;
     ///
     /// # Request::example(Method::Get, "/", |req| {
-    /// fn value<'s>(req: &'s mut Request, uri: &'static str, key: &str) -> &'s RawStr {
+    /// fn value<'s>(req: &'s mut Request, uri: &'static str, key: &str) -> &'s str {
     ///     req.set_uri(Origin::parse(uri).unwrap());
     ///
-    ///     req.get_query_value(key)
+    ///     req.query_value(key)
     ///         .and_then(|r| r.ok())
     ///         .unwrap_or("n/a".into())
     /// }
     ///
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "a").as_str(), "apple");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "z").as_str(), "zebra");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "A").as_str(), "n/a");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra&a=argon", "a").as_str(), "apple");
-    /// assert_eq!(value(req, "/?a=1&a=2&a=3&b=4", "a").as_str(), "1");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "apple").as_str(), "n/a");
+    /// assert_eq!(value(req, "/?a=apple&z=zebra", "a"), "apple");
+    /// assert_eq!(value(req, "/?a=apple&z=zebra", "z"), "zebra");
+    /// assert_eq!(value(req, "/?a=apple&z=zebra", "A"), "n/a");
+    /// assert_eq!(value(req, "/?a=apple&z=zebra&a=argon", "a"), "apple");
+    /// assert_eq!(value(req, "/?a=1&a=2&a=3&b=4", "a"), "1");
+    /// assert_eq!(value(req, "/?a=apple&z=zebra", "apple"), "n/a");
     /// # });
     /// ```
     #[inline]

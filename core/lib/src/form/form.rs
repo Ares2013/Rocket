@@ -62,7 +62,6 @@ impl<T: for<'a> FromForm<'a> + 'static> Form<T> {
     }
 }
 
-
 impl<T> std::ops::Deref for Form<T> {
     type Target = T;
 

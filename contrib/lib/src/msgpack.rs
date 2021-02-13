@@ -15,15 +15,17 @@
 //! features = ["msgpack"]
 //! ```
 
+use std::io;
 use std::ops::{Deref, DerefMut};
 
-use rocket::{Request, Data};
-use rocket::data::{ByteUnit, FromTransformedData, Transform::{self, *}, Outcome};
-use rocket::response::{self, content, Responder};
+use rocket::request::{Request, local_cache};
+use rocket::data::{ByteUnit, Data, FromData, Outcome};
+use rocket::response::{self, Responder, content};
 use rocket::http::Status;
+use rocket::form::prelude as form;
 
 use serde::Serialize;
-use serde::de::Deserialize;
+use serde::de::{Deserialize, DeserializeOwned};
 
 pub use rmp_serde::decode::Error;
 
@@ -110,45 +112,36 @@ impl<T> MsgPack<T> {
 
 const DEFAULT_LIMIT: ByteUnit = ByteUnit::Mebibyte(1);
 
-#[rocket::async_trait]
-impl<'r, T: Deserialize<'r>> FromTransformedData<'r> for MsgPack<T> {
-    type Error = Error;
-    type Owned = Vec<u8>;
-    type Borrowed = [u8];
-
-    async fn transform(
-        req: &'r Request<'_>,
-        data: Data
-    ) -> Outcome<Transform<Self::Owned>, Self::Error> {
-        let limit = req.limits().get("msgpack").unwrap_or(DEFAULT_LIMIT);
-        match data.open(limit).into_bytes().await {
-            Ok(buf) if buf.is_complete() => Outcome::Success(Borrowed(buf.into_inner())),
-            Ok(_) => {
-                let eof = std::io::ErrorKind::UnexpectedEof;
-                let e = std::io::Error::new(eof, "data limit exceeded");
-                Outcome::Failure((Status::BadRequest, Error::InvalidDataRead(e)))
-            },
-            Err(e) => Outcome::Failure((Status::BadRequest, Error::InvalidDataRead(e))),
-        }
+impl<'r, T: Deserialize<'r>> MsgPack<T> {
+    fn from_bytes(buf: &'r [u8]) -> Result<Self, Error> {
+        rmp_serde::from_slice(buf).map(MsgPack)
     }
 
-    async fn from_data(
-        _: &'r Request<'_>,
-        transform: Transform<Self::Owned, &'r mut Self::Borrowed>
-    ) -> Outcome<Self, Self::Error> {
-        use self::Error::*;
+    async fn from_data(req: &'r Request<'_>, data: Data) -> Result<Self, Error> {
+        let size_limit = req.limits().get("msgpack").unwrap_or(DEFAULT_LIMIT);
+        let bytes = match data.open(size_limit).into_bytes().await {
+            Ok(buf) if buf.is_complete() => buf.into_inner(),
+            Ok(_) => {
+                let eof = io::ErrorKind::UnexpectedEof;
+                return Err(Error::InvalidDataRead(io::Error::new(eof, "data limit exceeded")));
+            },
+            Err(e) => return Err(Error::InvalidDataRead(e)),
+        };
 
-        let buf = transform.borrowed();
-        match rmp_serde::from_slice(buf) {
-            Ok(val) => Outcome::Success(MsgPack(val)),
-            Err(e) => {
-                error_!("failed to parse MessagePack: {:?}", e);
-                match e {
-                    TypeMismatch(_) | OutOfRange | LengthMismatch(_) =>
-                        Outcome::Failure((Status::UnprocessableEntity, e)),
-                    _ => Outcome::Failure((Status::BadRequest, e)),
-                }
-            }
+        Self::from_bytes(local_cache!(req, bytes))
+    }
+}
+#[rocket::async_trait]
+impl<'r, T: Deserialize<'r>> FromData<'r> for MsgPack<T> {
+    type Error = Error;
+
+    async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
+        match Self::from_data(req, data).await {
+            Ok(value) => Outcome::Success(value),
+            Err(Error::InvalidDataRead(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
+                Outcome::Failure((Status::PayloadTooLarge, Error::InvalidDataRead(e)))
+            },
+            Err(e) => Outcome::Failure((Status::BadRequest, e)),
         }
     }
 }
@@ -165,6 +158,19 @@ impl<'r, T: Serialize> Responder<'r, 'static> for MsgPack<T> {
             })?;
 
         content::MsgPack(buf).respond_to(req)
+    }
+}
+
+#[rocket::async_trait]
+impl<'v, T: DeserializeOwned + Send> form::FromFormField<'v> for MsgPack<T> {
+    async fn from_data(f: form::DataField<'v, '_>) -> Result<Self, form::Errors<'v>> {
+        Self::from_data(f.request, f.data).await.map_err(|e| {
+            match e {
+                Error::InvalidMarkerRead(e) | Error::InvalidDataRead(e) => e.into(),
+                Error::Utf8Error(e) => e.into(),
+                _ => form::Error::custom(e).into(),
+            }
+        })
     }
 }
 
