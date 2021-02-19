@@ -1,6 +1,7 @@
 #[macro_use]extern crate rocket;
 
-use rocket::form::{Form, FromForm, FromFormField, Context};
+use rocket::http::Status;
+use rocket::form::{ContextForm, FromForm, FromFormField, Context};
 use rocket::data::TempFile;
 
 use rocket_contrib::serve::{StaticFiles, crate_relative};
@@ -9,6 +10,7 @@ use rocket_contrib::templates::Template;
 #[derive(Debug, FromForm)]
 struct Password<'v> {
     #[field(validate = len(6..))]
+    #[field(validate = eq(self.second))]
     first: &'v str,
     #[field(validate = eq(self.first))]
     second: &'v str,
@@ -59,7 +61,6 @@ struct Account<'v> {
 struct Submit<'v> {
     account: Account<'v>,
     submission: Submission<'v>,
-    submissions: Vec<Submission<'v>>,
 }
 
 #[get("/")]
@@ -67,43 +68,17 @@ fn index<'r>() -> Template {
     Template::render("index", &Context::default())
 }
 
-// #[post("/", data = "<form>")]
-// fn submit<'r>(form: Contextual<Form<Submit<'r>, Context<'r>>>) -> Template {
-//     match form.into_inner() {
-//         Ok(_submission) => {
-//             // Do something with submission...render a different template?
-//             index()
-//         }
-//         Err(ctxt) => {
-//             dbg!(&ctxt);
-//             Template::render("index", &ctxt)
-//         }
-//     }
-// }
-
-use rocket::form::Errors;
-use rocket::response::Redirect;
-
 #[post("/", data = "<form>")]
-fn submit<'r>(form: Result<Form<Submit<'r>>, Errors<'r>>) -> Redirect {
-    if let Err(e) = form {
-        for e in e {
-            eprintln!("error: {:?}", e);
+fn submit<'r>(form: ContextForm<'r, Submit<'r>>) -> (Status, Template) {
+    let template = match form.value {
+        Some(submission) => {
+            println!("submission: {:#?}", submission);
+            Template::render("success", &form.context)
         }
-    }
+        None => Template::render("index", &form.context),
+    };
 
-    Redirect::to(uri!(index))
-
-    // match form.into_inner() {
-    //     Ok(_submission) => {
-    //         // Do something with submission...render a different template?
-    //         index()
-    //     }
-    //     Err(ctxt) => {
-    //         dbg!(&ctxt);
-    //         Template::render("index", &ctxt)
-    //     }
-    // }
+    (form.context.status(), template)
 }
 
 #[launch]

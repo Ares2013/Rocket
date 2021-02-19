@@ -215,10 +215,7 @@ impl<S, E, F> Outcome<S, E, F> {
     /// ```
     #[inline]
     pub fn is_success(&self) -> bool {
-        match *self {
-            Success(_) => true,
-            _ => false
-        }
+        matches!(self, Success(_))
     }
 
     /// Return true if this `Outcome` is a `Failure`.
@@ -240,10 +237,7 @@ impl<S, E, F> Outcome<S, E, F> {
     /// ```
     #[inline]
     pub fn is_failure(&self) -> bool {
-        match *self {
-            Failure(_) => true,
-            _ => false
-        }
+        matches!(self, Failure(_))
     }
 
     /// Return true if this `Outcome` is a `Forward`.
@@ -265,10 +259,7 @@ impl<S, E, F> Outcome<S, E, F> {
     /// ```
     #[inline]
     pub fn is_forward(&self) -> bool {
-        match *self {
-            Forward(_) => true,
-            _ => false
-        }
+        matches!(self, Forward(_))
     }
 
     /// Converts from `Outcome<S, E, F>` to `Option<S>`.
@@ -349,7 +340,8 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Converts from `Outcome<S, E, F>` to `Result<S, T>` for a given `T`.
+    /// Returns a `Success` value as `Ok()` or `value` in `Err`. Converts from
+    /// `Outcome<S, E, F>` to `Result<S, T>` for a given `T`.
     ///
     /// Returns `Ok` with the `Success` value if this is a `Success`, otherwise
     /// returns an `Err` with the provided value. `self` is consumed, and all
@@ -376,8 +368,9 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Converts from `Outcome<S, E, F>` to `Result<S, T>` for a given `T`
-    /// produced from a supplied function or closure.
+    /// Returns a `Success` value as `Ok()` or `f()` in `Err`. Converts from
+    /// `Outcome<S, E, F>` to `Result<S, T>` for a given `T` produced from a
+    /// supplied function or closure.
     ///
     /// Returns `Ok` with the `Success` value if this is a `Success`, otherwise
     /// returns an `Err` with the result of calling `f`. `self` is consumed, and
@@ -425,9 +418,9 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Maps an `Outcome<S, E, F>` to an `Outcome<T, E, F>` by applying the
-    /// function `f` to the value of type `S` in `self` if `self` is an
-    /// `Outcome::Success`.
+    /// Maps the `Success` value using `f`. Maps an `Outcome<S, E, F>` to an
+    /// `Outcome<T, E, F>` by applying the function `f` to the value of type `S`
+    /// in `self` if `self` is an `Outcome::Success`.
     ///
     /// ```rust
     /// # use rocket::outcome::Outcome;
@@ -447,9 +440,9 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Maps an `Outcome<S, E, F>` to an `Outcome<S, T, F>` by applying the
-    /// function `f` to the value of type `E` in `self` if `self` is an
-    /// `Outcome::Failure`.
+    /// Maps the `Failure` value using `f`. Maps an `Outcome<S, E, F>` to an
+    /// `Outcome<S, T, F>` by applying the function `f` to the value of type `E`
+    /// in `self` if `self` is an `Outcome::Failure`.
     ///
     /// ```rust
     /// # use rocket::outcome::Outcome;
@@ -469,9 +462,9 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Maps an `Outcome<S, E, F>` to an `Outcome<S, E, T>` by applying the
-    /// function `f` to the value of type `F` in `self` if `self` is an
-    /// `Outcome::Forward`.
+    /// Maps the `Forward` value using `f`. Maps an `Outcome<S, E, F>` to an
+    /// `Outcome<S, E, T>` by applying the function `f` to the value of type `F`
+    /// in `self` if `self` is an `Outcome::Forward`.
     ///
     /// ```rust
     /// # use rocket::outcome::Outcome;
@@ -491,9 +484,10 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Maps an `Outcome<S, E, F>` to an `Outcome<T, E, F>` by applying the
-    /// function `f` to the value of type `S` in `self` if `self` is an
-    /// `Outcome::Success`.
+    /// Maps the `Success` value using `f()`, returning the `Outcome` from `f()`
+    /// or the original `self` if `self` is not `Success`. Maps an `Outcome<S,
+    /// E, F>` to an `Outcome<T, E, F>` by applying the function `f` to the
+    /// value of type `S` in `self` if `self` is an `Outcome::Success`.
     ///
     /// # Examples
     ///
@@ -520,6 +514,8 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
+    /// Maps the `Failure` value using `f()`, returning the `Outcome` from `f()`
+    /// or the original `self` if `self` is not `Failure`. Maps an `Outcome<S,
     /// Maps an `Outcome<S, E, F>` to an `Outcome<S, T, F>` by applying the
     /// function `f` to the value of type `E` in `self` if `self` is an
     /// `Outcome::Failure`.
@@ -549,9 +545,10 @@ impl<S, E, F> Outcome<S, E, F> {
         }
     }
 
-    /// Maps an `Outcome<S, E, F>` to an `Outcome<S, E, T>` by applying the
-    /// function `f` to the value of type `F` in `self` if `self` is an
-    /// `Outcome::Forward`.
+    /// Maps the `Forward` value using `f()`, returning the `Outcome` from `f()`
+    /// or the original `self` if `self` is not `Forward`. Maps an `Outcome<S,
+    /// E, F>` to an `Outcome<S, E, T>` by applying the function `f` to the
+    /// value of type `F` in `self` if `self` is an `Outcome::Forward`.
     ///
     /// # Examples
     ///

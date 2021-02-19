@@ -43,11 +43,12 @@
     <label for="{{ name }}">{{ label }}</label>
     <textarea placeholder="{{ placeholder }}"
         name="{{ name }}" id="{{ name }}" rows="8" cols="40"
-        maxlength={{ max }}
         {% if name in errors %} class="error" {% endif %}
     >
         {{- self::value_for(name=name) -}}
     </textarea>
+
+    {{ self::errors_for(name=name) }}
 {% endmacro input %}
 
 {% macro select(label, name, options) %}

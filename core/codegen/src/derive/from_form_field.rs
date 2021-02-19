@@ -54,7 +54,6 @@ pub fn derive_from_form_field(input: proc_macro::TokenStream) -> TokenStream {
                         use #_http::uncased::AsUncased;
 
                         #(
-                            println!("{:?}", __f.value);
                             if __f.value.as_uncased() == #variant_name {
                                 return #_ok(#builder);
                             }

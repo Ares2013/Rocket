@@ -20,8 +20,8 @@
       <h1>Form Example</h1>
 
       {% if errors | length > 1 %}
-          <small class="text-error">
-          {{ errors | length }} field(s) have errors
+          <small class="text-error" style="margin-top: -20px">
+              {{ errors | length }} field(s) have errors
           </small>
       {% endif %}
 
@@ -104,7 +104,6 @@
         <fieldset>
           <legend>Contents</legend>
 
-          <p>
             {{
                 m::textarea(
                     label="Abstract",
@@ -113,9 +112,7 @@
                     max=250
                 )
             }}
-          </p>
 
-          <p>
           {{
               m::input(
                   label="File to Upload (PDF, max 1MiB)",
@@ -125,7 +122,6 @@
           }}
 
           <!-- <input type="file" name="submission.file" id="file" required accept=".pdf"> -->
-          </p>
 
           <div class="row">
             <div class="col">

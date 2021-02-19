@@ -23,11 +23,14 @@ impl crate::http::ext::IntoOwned for Errors<'_> {
 
 #[derive(Debug, PartialEq)]
 pub struct Error<'v> {
+    /// The name of the field, if it is known.
     pub name: Option<NameViewCow<'v>>,
+    /// The field's value, if it is known.
     pub value: Option<Cow<'v, str>>,
+    /// The kind of error that occured.
     pub kind: ErrorKind<'v>,
+    /// The entitiy that caused the error.
     pub entity: Entity,
-    pub context: Option<Cow<'v, str>>,
 }
 
 impl<'v> Serialize for Error<'v> {
@@ -50,7 +53,6 @@ impl crate::http::ext::IntoOwned for Error<'_> {
             value: self.value.into_owned(),
             kind: self.kind.into_owned(),
             entity: self.entity,
-            context: self.context.into_owned(),
         }
     }
 }
@@ -156,16 +158,6 @@ impl<'v> Errors<'v> {
         self.iter_mut().for_each(|e| e.set_value(value));
     }
 
-    pub fn with_context<C: Into<Cow<'v, str>>>(mut self, ctxt: C) -> Self {
-        self.set_context(ctxt);
-        self
-    }
-
-    pub fn set_context<C: Into<Cow<'v, str>>>(&mut self, ctxt: C) {
-        let cow = ctxt.into();
-        self.iter_mut().for_each(|e| e.set_context(cow.clone()));
-    }
-
     pub fn status(&self) -> Status {
         match &*self.0 {
             &[] => Status::InternalServerError,
@@ -220,17 +212,6 @@ impl<'v> Error<'v> {
         }
     }
 
-    pub fn with_context<C: Into<Cow<'v, str>>>(mut self, ctxt: C) -> Self {
-        self.set_context(ctxt);
-        self
-    }
-
-    pub fn set_context<C: Into<Cow<'v, str>>>(&mut self, ctxt: C) {
-        if self.context.is_none() {
-            self.context = Some(ctxt.into());
-        }
-    }
-
     pub fn is_for_exactly<N: AsRef<Name>>(&self, name: N) -> bool {
         self.name.as_ref()
             .map(|n| name.as_ref() == n)
@@ -264,12 +245,12 @@ impl<'v> Error<'v> {
         use multer::Error::*;
 
         match self.kind {
-            InvalidLength { min: None, max: Some(_) }
+            InvalidLength { min: None, .. }
             | Multipart(FieldSizeExceeded { .. })
             | Multipart(StreamSizeExceeded { .. })
                 => Status::PayloadTooLarge,
-            Io(_) | Unknown => Status::InternalServerError,
-            _ if self.entity == Entity::Form => Status::BadRequest,
+            Unknown => Status::InternalServerError,
+            Io(_) | _ if self.entity == Entity::Form => Status::BadRequest,
             _ => Status::UnprocessableEntity
         }
     }
@@ -305,7 +286,7 @@ impl fmt::Display for ErrorKind<'_> {
         match self {
             ErrorKind::InvalidLength { min, max } => {
                 match (min, max) {
-                    (None, None) => write!(f, "invalid length")?,
+                    (None, None) => write!(f, "unexpected or incomplete")?,
                     (None, Some(k)) => write!(f, "length cannot exceed {}", k)?,
                     (Some(1), None) => write!(f, "value cannot be empty")?,
                     (Some(k), None) => write!(f, "length must be at least {}", k)?,
@@ -345,7 +326,7 @@ impl fmt::Display for ErrorKind<'_> {
             ErrorKind::Bool(e) => write!(f, "invalid boolean: {}", e)?,
             ErrorKind::Float(e) => write!(f, "invalid float: {}", e)?,
             ErrorKind::Addr(e) => write!(f, "invalid address: {}", e)?,
-            ErrorKind::Io(e) => write!(f, "i/o: {}", e)?,
+            ErrorKind::Io(e) => write!(f, "i/o error: {}", e)?,
         }
 
         Ok(())
@@ -354,19 +335,7 @@ impl fmt::Display for ErrorKind<'_> {
 
 impl fmt::Display for Error<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.kind)?;
-
-        // if self.entity == Entity::Value {
-        //     if let Some(val) = self.value {
-        //         write!(f, " {:?}", val)?;
-        //     }
-        // }
-
-        if let Some(ref context) = self.context {
-            write!(f, " ({})", context)?;
-        }
-
-        Ok(())
+        self.kind.fmt(f)
     }
 }
 
@@ -456,12 +425,7 @@ impl<'v, T: Into<ErrorKind<'v>>> From<T> for Error<'v> {
     fn from(k: T) -> Self {
         let kind = k.into();
         let entity = kind.default_entity();
-        Error {
-            name: None,
-            value: None,
-            context: None,
-            kind, entity,
-        }
+        Error { name: None, value: None, kind, entity }
     }
 }
 
@@ -530,7 +494,33 @@ macro_rules! impl_from_for {
     )
 }
 
-impl_from_for!(<'a> multer::Error => ErrorKind<'a> as Multipart);
+impl<'a> From<multer::Error> for Error<'a> {
+    fn from(error: multer::Error) -> Self {
+        use multer::Error::*;
+        use self::ErrorKind::*;
+
+        let incomplete = Error::from(InvalidLength { min: None, max: None });
+        match error {
+            UnknownField { field_name: Some(name) } => Error::from(Unexpected).with_name(name),
+            UnknownField { field_name: None } => Error::from(Unexpected),
+            FieldSizeExceeded { limit, field_name } => {
+                let e = Error::from((None, Some(limit)));
+                match field_name {
+                    Some(name) => e.with_name(name),
+                    None => e
+                }
+            },
+            StreamSizeExceeded { limit } => {
+                Error::from((None, Some(limit))).with_entity(Entity::Form)
+            }
+            IncompleteFieldData { field_name: Some(name) } => incomplete.with_name(name),
+            IncompleteFieldData { field_name: None } => incomplete,
+            IncompleteStream | IncompleteHeaders => incomplete.with_entity(Entity::Form),
+            e => Error::from(ErrorKind::Multipart(e))
+        }
+    }
+}
+
 impl_from_for!(<'a> Utf8Error => ErrorKind<'a> as Utf8);
 impl_from_for!(<'a> ParseIntError => ErrorKind<'a> as Int);
 impl_from_for!(<'a> ParseFloatError => ErrorKind<'a> as Float);

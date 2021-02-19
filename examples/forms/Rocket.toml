@@ -1,2 +1,2 @@
 [global.limits]
-'data-form' = "10kb"
+data-form = "2MiB"

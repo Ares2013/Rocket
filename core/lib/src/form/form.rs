@@ -1,64 +1,151 @@
-use std::path::Path;
-
-use multer::Multipart;
-
-use crate::request::{Request, local_cache};
-use crate::data::{Data, FromData, Limits, Outcome};
-use crate::form::error::Errors;
-use crate::http::uri::{Query, FromUriParam};
-use crate::http::RawStr;
+use crate::request::Request;
+use crate::data::{Data, FromData, Outcome};
+use crate::http::{RawStr, ext::IntoOwned};
+use crate::form::parser::{Parser, RawStrParser, Buffer};
 use crate::form::prelude::*;
 
+/// A data guard for parsing [`FromForm`] types strictly.
+///
+/// This type implements the [`FromTransformedData`] trait. It provides a
+/// generic means to parse arbitrary structures from incoming form data.
+///
+/// # Strictness
+///
+/// A `Form<T>` will parse successfully from an incoming form only if the form
+/// contains the exact set of fields in `T`. Said another way, a `Form<T>` will
+/// error on missing and/or extra fields. For instance, if an incoming form
+/// contains the fields "a", "b", and "c" while `T` only contains "a" and "c",
+/// the form _will not_ parse as `Form<T>`. If you would like to admit extra
+/// fields without error, see [`LenientForm`](crate::request::LenientForm).
+///
+/// # Usage
+///
+/// This type can be used with any type that implements the `FromForm` trait.
+/// The trait can be automatically derived; see the [`FromForm`] documentation
+/// for more information on deriving or implementing the trait.
+///
+/// Because `Form` implements `FromTransformedData`, it can be used directly as a target of
+/// the `data = "<param>"` route parameter as long as its generic type
+/// implements the `FromForm` trait:
+///
+/// ```rust
+/// # #[macro_use] extern crate rocket;
+/// use rocket::request::Form;
+/// use rocket::http::RawStr;
+///
+/// #[derive(FromForm)]
+/// struct UserInput<'f> {
+///     // The raw, undecoded value. You _probably_ want `String` instead.
+///     value: &'f RawStr
+/// }
+///
+/// #[post("/submit", data = "<user_input>")]
+/// fn submit_task(user_input: Form<UserInput>) -> String {
+///     format!("Your value: {}", user_input.value)
+/// }
+/// # fn main() {  }
+/// ```
+///
+/// A type of `Form<T>` automatically dereferences into an `&T` or `&mut T`,
+/// though you can also transform a `Form<T>` into a `T` by calling
+/// [`into_inner()`](Form::into_inner()). Thanks to automatic dereferencing, you
+/// can access fields of `T` transparently through a `Form<T>`, as seen above
+/// with `user_input.value`.
+///
+/// For posterity, the owned analog of the `UserInput` type above is:
+///
+/// ```rust
+/// struct OwnedUserInput {
+///     // The decoded value. You _probably_ want this.
+///     value: String
+/// }
+/// ```
+///
+/// A handler that handles a form of this type can similarly by written:
+///
+/// ```rust
+/// # #![allow(deprecated, unused_attributes)]
+/// # #[macro_use] extern crate rocket;
+/// # use rocket::request::Form;
+/// # #[derive(FromForm)]
+/// # struct OwnedUserInput {
+/// #     value: String
+/// # }
+/// #[post("/submit", data = "<user_input>")]
+/// fn submit_task(user_input: Form<OwnedUserInput>) -> String {
+///     format!("Your value: {}", user_input.value)
+/// }
+/// # fn main() {  }
+/// ```
+///
+/// Note that no lifetime annotations are required in either case.
+///
+/// ## `&RawStr` vs. `String`
+///
+/// Whether you should use a `&RawStr` or `String` in your `FromForm` type
+/// depends on your use case. The primary question to answer is: _Can the input
+/// contain characters that must be URL encoded?_ Note that this includes common
+/// characters such as spaces. If so, then you must use `String`, whose
+/// [`FromFormValue`](crate::request::FromFormValue) implementation automatically URL
+/// decodes the value. Because the `&RawStr` references will refer directly to
+/// the underlying form data, they will be raw and URL encoded.
+///
+/// If it is known that string values will not contain URL encoded characters,
+/// or you wish to handle decoding and validation yourself, using `&RawStr` will
+/// result in fewer allocation and is thus preferred.
+///
+/// ## Incoming Data Limits
+///
+/// The default size limit for incoming form data is 32KiB. Setting a limit
+/// protects your application from denial of service (DOS) attacks and from
+/// resource exhaustion through high memory consumption. The limit can be
+/// increased by setting the `limits.forms` configuration parameter. For
+/// instance, to increase the forms limit to 512KiB for all environments, you
+/// may add the following to your `Rocket.toml`:
+///
+/// ```toml
+/// [global.limits]
+/// forms = 524288
+/// ```
 #[derive(Debug)]
 pub struct Form<T>(T);
 
+impl<T> Form<T> {
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
 impl Form<()> {
     /// `string` must represent a decoded string.
-    pub fn parse_values(string: &str) -> impl Iterator<Item = ValueField<'_>> {
+    pub fn values(string: &str) -> impl Iterator<Item = ValueField<'_>> {
         // WHATWG URL Living Standard 5.1 steps 1, 2, 3.1 - 3.3.
         string.split('&')
             .filter(|s| !s.is_empty())
             .map(ValueField::parse)
     }
-
-    pub fn parse_raw_values(string: &RawStr) -> impl Iterator<Item = (&RawStr, &RawStr)> {
-        // WHATWG URL Living Standard 5.1 steps 1, 2, 3.1 - 3.3.
-        string.split('&')
-            .filter(|s| !s.is_empty())
-            .map(|s| ValueField::parse(s.as_str()))
-            .map(|f| (f.name.source().as_str().into(), f.value.into()))
-    }
 }
 
-impl<'v, T: FromForm<'v>> Form<T> {
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-
+impl<'r, T: FromForm<'r>> Form<T> {
     /// `string` must represent a decoded string.
-    pub fn parse(string: &'v str) -> Result<'v, T> {
+    pub fn parse(string: &'r str) -> Result<'r, T> {
         // WHATWG URL Living Standard 5.1 steps 1, 2, 3.1 - 3.3.
         let mut ctxt = T::init(Options::Lenient);
-        Form::parse_values(string).for_each(|f| T::push_value(&mut ctxt, f));
+        Form::values(string).for_each(|f| T::push_value(&mut ctxt, f));
         T::finalize(ctxt)
     }
 }
 
 impl<T: for<'a> FromForm<'a> + 'static> Form<T> {
     /// `string` must represent an undecoded string.
-    pub fn parse_encoded_raw(string: &RawStr) -> Result<'static, T> {
-        use crate::http::ext::IntoOwned;
-
+    pub fn parse_encoded(string: &RawStr) -> Result<'static, T> {
         let buffer = Buffer::new();
-        let mut context = T::init(Options::Lenient);
-        for (name, val) in Form::parse_raw_values(string) {
-            let (name, val) = (name.url_decode_lossy(), val.url_decode_lossy());
-            let name = buffer.push_one(name);
-            let val = buffer.push_one(val);
-            T::push_value(&mut context, ValueField::from((name, val)))
+        let mut ctxt = T::init(Options::Lenient);
+        for field in RawStrParser::new(&buffer, string) {
+            T::push_value(&mut ctxt, field)
         }
 
-        T::finalize(context).map_err(|e| e.into_owned())
+        T::finalize(ctxt).map_err(|e| e.into_owned())
     }
 }
 
@@ -76,230 +163,26 @@ impl<T> std::ops::DerefMut for Form<T> {
     }
 }
 
-impl<'f, A, T: FromUriParam<Query, A> + FromForm<'f>> FromUriParam<Query, A> for Form<T> {
-    type Target = T::Target;
-
-    #[inline(always)]
-    fn from_uri_param(param: A) -> Self::Target {
-        T::from_uri_param(param)
-    }
-}
-
-fn sanitize(file_name: &str) -> Option<&str> {
-    let file_name = Path::new(file_name)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|n| n.find('.').map(|i| n.split_at(i).0).unwrap_or(n))?;
-
-    if file_name.is_empty()
-        || file_name.starts_with(|c| c == '.' || c == '*')
-        || file_name.ends_with(|c| c == ':' || c == '>' || c == '<')
-        || file_name.contains(|c| c == '/' || c == '\\')
-    {
-        return None
-    }
-
-    Some(file_name)
-}
-
-macro_rules! try_or_finalize {
-    ($T:ty, $context:expr, $e:expr) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => match <$T as FromForm<'_>>::finalize($context) {
-                Ok(_) => return Err(e.into()),
-                Err(mut errors) => {
-                    errors.push(e.into());
-                    return Err(errors);
-                }
-            },
-        }
-    };
-}
-
-#[doc(hidden)]
-enum Storage<'r> {
-    Str(&'r Buffer, &'r RawStr),
-    MultiPart(&'r Buffer, Multipart)
-}
-
-async fn parse_form<'r, T: FromForm<'r>>(
-    request: &'r Request<'_>,
-    mut storage: Storage<'r>,
-    options: Options
-) -> Result<'r, T> {
-    let mut context = T::init(options);
-    match storage {
-        Storage::Str(buffer, form) => {
-            use std::borrow::Cow::*;
-
-            for (name, val) in Form::parse_raw_values(form) {
-                let name_val = match (name.url_decode_lossy(), val.url_decode_lossy()) {
-                    (Borrowed(name), Borrowed(val)) => (name, val),
-                    (Borrowed(name), Owned(v)) => (name, buffer.push_one(v)),
-                    (Owned(n), Borrowed(val)) => (buffer.push_one(n), val),
-                    (Owned(mut n), Owned(v)) => {
-                        let len = n.len();
-                        n.push_str(&v);
-                        buffer.push_split(n, len)
-                    }
-                };
-
-                T::push_value(&mut context, ValueField::from(name_val))
-            }
-
-            T::finalize(context)
-        }
-        Storage::MultiPart(buffer, ref mut mp) => loop {
-            trace_!("fetching next multipart field");
-
-            let field = match try_or_finalize!(T, context, mp.next_field().await) {
-                Some(field) => field,
-                None => return T::finalize(context)
-            };
-
-            trace_!("multipart field: {:?}", field.name());
-
-            // A field with a content-type is data; one without is "value".
-            let ct = field.content_type().and_then(|m| m.as_ref().parse().ok());
-            if let Some(content_type) = ct {
-                let (name, file_name) = match (field.name(), field.file_name()) {
-                    (None, None) => ("", None),
-                    (None, Some(file_name)) => ("", Some(buffer.push_one(file_name))),
-                    (Some(name), None) => (buffer.push_one(name), None),
-                    (Some(a), Some(b)) => {
-                        let (field_name, file_name) = buffer.push_two(a, b);
-                        (field_name, Some(file_name))
-                    }
-                };
-
-                let file_name = file_name.and_then(sanitize);
-
-                let data = Data::from(field);
-                T::push_data(&mut context, DataField {
-                    name: NameView::new(name), file_name, content_type, data, request
-                }).await;
-            } else {
-                let (mut buf, len) = match field.name() {
-                    Some(s) => (s.to_string(), s.len()),
-                    None => (String::new(), 0)
-                };
-
-                let text = try_or_finalize!(T, context, field.text().await);
-                buf.push_str(&text);
-
-                let name_val = buffer.push_split(buf, len);
-                T::push_value(&mut context, ValueField::from(name_val));
-            }
-        }
-    }
-}
-
-impl<'r> Storage<'r> {
-    async fn string(req: &'r Request<'_>, data: Data) -> Result<'r, Storage<'r>> {
-        let limit = req.limits().get("form").unwrap_or(Limits::FORM);
-        let string = data.open(limit).into_string().await?;
-        if !string.is_complete() {
-            Err((None, Some(limit.as_u64())))?
-        }
-
-        let string = local_cache!(req, string.into_inner());
-        let buffer = local_cache!(req, Buffer::new());
-        Ok(Storage::Str(buffer, RawStr::new(string)))
-    }
-
-    async fn multipart(req: &'r Request<'_>, data: Data) -> Result<'r, Storage<'r>> {
-        let boundary = req.content_type()
-            .ok_or(multer::Error::NoMultipart)?
-            .param("boundary")
-            .ok_or(multer::Error::NoBoundary)?;
-
-        let form_limit = req.limits()
-            .get("data-form")
-            .unwrap_or(Limits::DATA_FORM);
-
-        let mp = Multipart::with_reader(data.open(form_limit), boundary);
-        let buffer = local_cache!(req, Buffer::new());
-        Ok(Storage::MultiPart(buffer, mp))
-    }
-}
-
 #[crate::async_trait]
-impl<'r, T: FromForm<'r> + 'r> FromData<'r> for Form<T> {
+impl<'r, T: FromForm<'r>> FromData<'r> for Form<T> {
     type Error = Errors<'r>;
 
     async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
-        let storage = match req.content_type() {
-            Some(c) if c.is_form() => Storage::string(req, data).await,
-            Some(c) if c.is_form_data() => Storage::multipart(req, data).await,
-            _ => return Outcome::Forward(data),
-        };
+        use either::Either;
 
-        let storage = match storage {
-            Ok(storage) => storage,
-            Err(e) => return Outcome::Failure((e.status(), e))
-        };
+        let mut parser = try_outcome!(Parser::new(req, data).await);
+        let mut context = T::init(Options::Lenient);
+        while let Some(field) = parser.next().await {
+            match field {
+                Ok(Either::Left(value)) => T::push_value(&mut context, value),
+                Ok(Either::Right(data)) => T::push_data(&mut context, data).await,
+                Err(e) => T::push_error(&mut context, e),
+            }
+        }
 
-        match parse_form(req, storage, Options::Lenient).await {
+        match T::finalize(context) {
             Ok(value) => Outcome::Success(Form(value)),
             Err(e) => Outcome::Failure((e.status(), e)),
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct Strict<T>(T);
-
-#[crate::async_trait]
-impl<'v, T: FromForm<'v>> FromForm<'v> for Strict<T> {
-    type Context = T::Context;
-
-    #[inline(always)]
-    fn init(opts: Options) -> Self::Context {
-        T::init(Options { strict: true, ..opts })
-    }
-
-    #[inline(always)]
-    fn push_value(ctxt: &mut Self::Context, field: ValueField<'v>) {
-        T::push_value(ctxt, field)
-    }
-
-    #[inline(always)]
-    async fn push_data(ctxt: &mut Self::Context, field: DataField<'v, '_>) {
-        T::push_data(ctxt, field).await
-    }
-
-    #[inline(always)]
-    fn finalize(this: Self::Context) -> Result<'v, Self> {
-        T::finalize(this).map(Self)
-    }
-}
-
-impl<T> Strict<T> {
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-}
-
-impl<T> std::ops::Deref for Strict<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> std::ops::DerefMut for Strict<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<'f, A, T: FromUriParam<Query, A> + FromForm<'f>> FromUriParam<Query, A> for Strict<T> {
-    type Target = T::Target;
-
-    #[inline(always)]
-    fn from_uri_param(param: A) -> Self::Target {
-        T::from_uri_param(param)
     }
 }

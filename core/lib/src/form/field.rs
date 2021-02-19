@@ -4,16 +4,16 @@ use crate::http::{ContentType, RawStr};
 use crate::{Request, Data};
 
 #[derive(Debug, Clone)]
-pub struct ValueField<'v> {
-    pub name: NameView<'v>,
-    pub value: &'v str,
+pub struct ValueField<'r> {
+    pub name: NameView<'r>,
+    pub value: &'r str,
 }
 
-pub struct DataField<'v, 'r> {
-    pub name: NameView<'v>,
-    pub file_name: Option<&'v str>,
+pub struct DataField<'r, 'i> {
+    pub name: NameView<'r>,
+    pub file_name: Option<&'r str>,
     pub content_type: ContentType,
-    pub request: &'v Request<'r>,
+    pub request: &'r Request<'i>,
     pub data: Data,
 }
 

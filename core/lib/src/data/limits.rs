@@ -9,16 +9,15 @@ use crate::http::uncased::Uncased;
 /// Mapping from (hierarchical) data types to size limits.
 ///
 /// A `Limits` structure contains a mapping from a given hierarchical data type
-/// ("form", "data-form", "data-form/field", and so on) to the maximum size in
-/// bytes that should be accepted by Rocket for said data type. For instance, if
-/// the limit for "form" is set to `256`, only 256 bytes from an incoming
-/// non-data form (that is, url-encoded) will be accepted.
+/// ("form", "data-form", "ext/pdf", and so on) to the maximum size in bytes
+/// that should be accepted by Rocket for said data type. For instance, if the
+/// limit for "form" is set to `256`, only 256 bytes from an incoming non-data
+/// form (that is, url-encoded) will be accepted.
 ///
 /// To help in preventing DoS attacks, all incoming data reads must capped by a
 /// limit. As such, all data guards impose a limit. The _name_ of the limit is
 /// dictated by the data guard or type itself. For instance, [`Form`] imposes
-/// the `form` limit for value-based forms, `data-form` limit for data-based
-/// forms, and `data-form/field` limit for individual fields of data-based
+/// the `form` limit for value-based forms and `data-form` limit for data-based
 /// forms.
 ///
 /// If a limit is exceeded, a guard will typically fail. The [`Capped`] type
@@ -61,7 +60,6 @@ use crate::http::uncased::Uncased;
 /// |-------------------|---------|--------------|---------------------------------------|
 /// | `form`            | 32KiB   | [`Form`]     | entire non-data-based form            |
 /// | `data-form`       | 2MiB    | [`Form`]     | entire data-based form                |
-/// | `data-form/field` | 1MiB    | [`Form`]     | individual data-based form field      |
 /// | `file`            | 1MiB    | [`TempFile`] | [`TempFile`] data guard or form field |
 /// | `file/$ext`       | _N/A_   | [`TempFile`] | file form field with extension `$ext` |
 /// | `string`          | 8KiB    | [`String`]   | data guard or data form field         |
@@ -133,7 +131,6 @@ impl Default for Limits {
         Limits::new()
             .limit("form", Limits::FORM)
             .limit("data-form", Limits::DATA_FORM)
-            .limit("data-form/field", Limits::DATA_FORM_FIELD)
             .limit("file", Limits::FILE)
             .limit("string", Limits::STRING)
             .limit("bytes", Limits::BYTES)
@@ -146,9 +143,6 @@ impl Limits {
 
     /// Default limit for data-based forms.
     pub const DATA_FORM: ByteUnit = ByteUnit::Mebibyte(2);
-
-    /// Default limit for individual data-based form fields.
-    pub const DATA_FORM_FIELD: ByteUnit = ByteUnit::Mebibyte(1);
 
     /// Default limit for temporary files.
     pub const FILE: ByteUnit = ByteUnit::Mebibyte(1);
@@ -221,7 +215,6 @@ impl Limits {
     /// assert_eq!(limits.get("form"), Some(32.kibibytes()));
     /// assert_eq!(limits.get("json"), Some(1.mebibytes()));
     /// assert_eq!(limits.get("data-form"), Some(Limits::DATA_FORM));
-    /// assert_eq!(limits.get("data-form/field"), Some(Limits::DATA_FORM_FIELD));
     ///
     /// assert_eq!(limits.get("file"), Some(1.mebibytes()));
     /// assert_eq!(limits.get("file/png"), Some(1.mebibytes()));

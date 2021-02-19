@@ -159,7 +159,7 @@ impl Rocket {
 
         if is_form && req.method() == Method::Post && peek_buffer.len() >= min_len {
             let method = std::str::from_utf8(peek_buffer).ok()
-                .and_then(|raw_form| Form::parse_values(raw_form).next())
+                .and_then(|raw_form| Form::values(raw_form).next())
                 .filter(|field| field.name == "_method")
                 .and_then(|field| field.value.parse().ok());
 

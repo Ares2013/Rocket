@@ -1,7 +1,5 @@
-use std::ops::{Deref, DerefMut};
+use crate::form::prelude::*;
 
-use crate::request::{Request, form::{Form, FormDataError, FromForm}};
-use crate::data::{Data, Transformed, FromTransformedData, TransformFuture, FromDataFuture};
 use crate::http::uri::{Query, FromUriParam};
 
 /// A data guard for parsing [`FromForm`] types leniently.
@@ -58,9 +56,9 @@ use crate::http::uri::{Query, FromUriParam};
 /// forms = 524288
 /// ```
 #[derive(Debug)]
-pub struct LenientForm<T>(pub T);
+pub struct Strict<T>(T);
 
-impl<T> LenientForm<T> {
+impl<T> Strict<T> {
     /// Consumes `self` and returns the parsed value.
     ///
     /// # Example
@@ -78,44 +76,52 @@ impl<T> LenientForm<T> {
     /// fn submit(form: LenientForm<MyForm>) -> String {
     ///     form.into_inner().field
     /// }
-    /// # fn main() { }
-    #[inline(always)]
+    /// ```
     pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl<T> Deref for LenientForm<T> {
+#[crate::async_trait]
+impl<'v, T: FromForm<'v>> FromForm<'v> for Strict<T> {
+    type Context = T::Context;
+
+    #[inline(always)]
+    fn init(opts: Options) -> Self::Context {
+        T::init(Options { strict: true, ..opts })
+    }
+
+    #[inline(always)]
+    fn push_value(ctxt: &mut Self::Context, field: ValueField<'v>) {
+        T::push_value(ctxt, field)
+    }
+
+    #[inline(always)]
+    async fn push_data(ctxt: &mut Self::Context, field: DataField<'v, '_>) {
+        T::push_data(ctxt, field).await
+    }
+
+    #[inline(always)]
+    fn finalize(this: Self::Context) -> Result<'v, Self> {
+        T::finalize(this).map(Self)
+    }
+}
+
+impl<T> std::ops::Deref for Strict<T> {
     type Target = T;
 
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T> DerefMut for LenientForm<T> {
-    fn deref_mut(&mut self) -> &mut T {
+impl<T> std::ops::DerefMut for Strict<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<'r, T: FromForm<'r> + Send + 'r> FromTransformedData<'r> for LenientForm<T> {
-    type Error = FormDataError<'r, T::Error>;
-    type Owned = String;
-    type Borrowed = str;
-
-    fn transform(r: &'r Request<'_>, d: Data) -> TransformFuture<'r, Self::Owned, Self::Error> {
-        <Form<T>>::transform(r, d)
-    }
-
-    fn from_data(_: &'r Request<'_>, o: Transformed<'r, Self>) -> FromDataFuture<'r, Self, Self::Error> {
-        Box::pin(futures::future::ready(o.borrowed().and_then(|form| {
-            <Form<T>>::from_data(form, false).map(LenientForm)
-        })))
-    }
-}
-
-impl<'r, A, T: FromUriParam<Query, A> + FromForm<'r>> FromUriParam<Query, A> for LenientForm<T> {
+impl<'f, A, T: FromUriParam<Query, A> + FromForm<'f>> FromUriParam<Query, A> for Strict<T> {
     type Target = T::Target;
 
     #[inline(always)]

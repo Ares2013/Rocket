@@ -150,7 +150,6 @@ use crate::uri::{self, UriPart, UriDisplay};
 /// ```rust
 /// # #[macro_use] extern crate rocket;
 /// # use std::fmt;
-/// use rocket::form::Form;
 /// # use rocket::http::uri::{Formatter, UriDisplay, FromUriParam, Query};
 /// #
 /// # #[derive(FromForm)]
@@ -169,7 +168,7 @@ use crate::uri::{self, UriPart, UriDisplay};
 /// #         User { name: name.into(), nickname: nickname.to_string() }
 /// #     }
 /// # }
-///
+/// #
 /// #[post("/<name>?<user..>")]
 /// fn some_route(name: &str, user: User<'_>)  { /* .. */ }
 ///

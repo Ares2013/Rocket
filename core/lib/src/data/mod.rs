@@ -7,12 +7,10 @@ mod data_stream;
 mod from_data;
 mod limits;
 mod temp_file;
-mod from_transformed_data;
 
 pub use self::data::Data;
 pub use self::data_stream::DataStream;
 pub use self::from_data::{FromData, Outcome};
-// pub use self::from_transformed_data::{Transform, FromTransformedData};
 pub use self::limits::Limits;
 pub use self::capped::{N, Capped};
 pub use ubyte::{ByteUnit, ToByteUnit};

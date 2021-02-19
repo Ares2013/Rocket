@@ -50,6 +50,26 @@ impl StatusClass {
 /// constant should be used; one is declared for every status defined
 /// in the HTTP standard.
 ///
+/// # Responding
+///
+/// To set a custom `Status` on a response, use a [`response::status`]
+/// responder. Alternatively, respond with `(Status, T)` where `T: Responder`, but
+/// note that the response may require additional headers to be valid as
+/// enforced by the types in [`response::status`].
+///
+/// ```rust
+/// # extern crate rocket;
+/// # use rocket::get;
+/// use rocket::http::Status;
+///
+/// #[get("/")]
+/// fn index() -> (Status, &'static str) {
+///     (Status::NotFound, "Hey, there's no index!")
+/// }
+/// ```
+///
+/// [`response::status`]: ../response/status/index.html
+///
 /// ## Example
 ///
 /// A status of `200 OK` can be instantiated via the `Ok` constant:
@@ -90,6 +110,12 @@ pub struct Status {
     pub code: u16,
     /// The HTTP reason phrase associated with this status.
     pub reason: &'static str
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status::Ok
+    }
 }
 
 macro_rules! ctrs {

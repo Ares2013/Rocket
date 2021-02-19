@@ -6,6 +6,9 @@
 //! construct a proper response with that status code. Some types take in
 //! responders; when they do, the responder finalizes the response by writing
 //! out additional headers and, importantly, the body of the response.
+//!
+//! The [`Custom`] type allows responding with _any_ `Status` but _does not_
+//! ensure that all of the required headers are present.
 
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
@@ -418,11 +421,15 @@ impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for Conflict<R> {
 /// # Example
 ///
 /// ```rust
+/// # use rocket::get;
 /// use rocket::response::status;
 /// use rocket::http::Status;
 ///
 /// # #[allow(unused_variables)]
-/// let response = status::Custom(Status::ImATeapot, "Hi!");
+/// #[get("/")]
+/// fn handler() -> status::Custom<&'static str> {
+///     status::Custom(Status::ImATeapot, "Hi!")
+/// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Custom<R>(pub Status, pub R);
@@ -434,6 +441,13 @@ impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for Custom<R> {
         Response::build_from(self.1.respond_to(req)?)
             .status(self.0)
             .ok()
+    }
+}
+
+impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for (Status, R) {
+    #[inline(always)]
+    fn respond_to(self, request: &'r Request<'_>) -> response::Result<'o> {
+        Custom(self.0, self.1).respond_to(request)
     }
 }
 

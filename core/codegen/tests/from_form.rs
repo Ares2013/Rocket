@@ -13,7 +13,7 @@ fn lenient<'f, T: FromForm<'f>>(string: &'f str) -> Result<T, Errors<'f>> {
 fn strict_encoded<T: 'static>(string: &'static str) -> Result<T, Errors<'static>>
     where for<'a> T: FromForm<'a>
 {
-    Form::<Strict<T>>::parse_encoded_raw(string.into()).map(|s| s.into_inner())
+    Form::<Strict<T>>::parse_encoded(string.into()).map(|s| s.into_inner())
 }
 
 #[derive(Debug, PartialEq, FromForm)]

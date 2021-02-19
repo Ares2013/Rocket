@@ -119,20 +119,20 @@ impl Contains<&char> for String {
 }
 
 pub fn contains<'v, V, I>(value: V, item: I) -> Result<(), Errors<'v>>
-    where V: for<'a> Contains<&'a I>, I: Display
+    where V: for<'a> Contains<&'a I>, I: std::fmt::Debug
 {
     if !value.contains(&item) {
-        Err(Error::validation(format!("must contain {}", item)))?
+        Err(Error::validation(format!("must contain {:?}", item)))?
     }
 
     Ok(())
 }
 
 pub fn omits<'v, V, I>(value: V, item: I) -> Result<(), Errors<'v>>
-    where V: for<'a> Contains<&'a I>, I: Display
+    where V: for<'a> Contains<&'a I>, I: std::fmt::Debug
 {
     if value.contains(&item) {
-        Err(Error::validation(format!("cannot contain {}", item)))?
+        Err(Error::validation(format!("cannot contain {:?}", item)))?
     }
 
     Ok(())

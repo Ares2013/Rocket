@@ -18,6 +18,8 @@ pub trait FromForm<'v>: Send + Sized {
 
     async fn push_data(ctxt: &mut Self::Context, field: DataField<'v, '_>);
 
+    fn push_error(_ctxt: &mut Self::Context, _error: Error<'v>) { }
+
     fn finalize(this: Self::Context) -> Result<'v, Self>;
 
     fn default() -> Option<Self> {

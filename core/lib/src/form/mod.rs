@@ -441,9 +441,9 @@ mod options;
 mod from_form;
 mod from_form_field;
 mod form;
-mod query;
 mod context;
-mod buffer;
+mod strict;
+mod parser;
 pub mod validate;
 pub mod name;
 pub mod error;
@@ -464,9 +464,8 @@ pub use options::*;
 pub use from_form_field::*;
 pub use from_form::*;
 pub use form::*;
-pub use query::*;
 pub use context::*;
-pub(crate) use buffer::*;
+pub use strict::*;
 
 #[doc(hidden)]
 pub mod prelude {

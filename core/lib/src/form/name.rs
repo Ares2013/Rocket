@@ -426,18 +426,36 @@ impl<'v> From<NameView<'v>> for NameViewCow<'v> {
     }
 }
 
+impl<'v> From<(Option<&'v Name>, Cow<'v, str>)> for NameViewCow<'v> {
+    fn from((prefix, right): (Option<&'v Name>, Cow<'v, str>)) -> Self {
+        match prefix {
+            Some(left) => NameViewCow { left, right },
+            None => NameViewCow { left: "".into(), right }
+        }
+    }
+}
+
 impl<'v> From<(Option<&'v Name>, &'v str)> for NameViewCow<'v> {
     fn from((prefix, suffix): (Option<&'v Name>, &'v str)) -> Self {
-        match prefix {
-            Some(left) => NameViewCow { left, right: suffix.into() },
-            None => NameViewCow { left: "".into(), right: suffix.into() }
-        }
+        NameViewCow::from((prefix, Cow::Borrowed(suffix)))
     }
 }
 
 impl<'v> From<(&'v Name, &'v str)> for NameViewCow<'v> {
     fn from((prefix, suffix): (&'v Name, &'v str)) -> Self {
-        NameViewCow::from((Some(prefix), suffix))
+        NameViewCow::from((Some(prefix), Cow::Borrowed(suffix)))
+    }
+}
+
+impl<'v> From<&'v str> for NameViewCow<'v> {
+    fn from(name: &'v str) -> Self {
+        NameViewCow::from((None, Cow::Borrowed(name)))
+    }
+}
+
+impl<'v> From<String> for NameViewCow<'v> {
+    fn from(name: String) -> Self {
+        NameViewCow::from((None, Cow::Owned(name)))
     }
 }
 
