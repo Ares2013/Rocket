@@ -4,19 +4,19 @@ use crate::http::{RawStr, ext::IntoOwned};
 use crate::form::parser::{Parser, RawStrParser, Buffer};
 use crate::form::prelude::*;
 
-/// A data guard for parsing [`FromForm`] types strictly.
+/// A data guard for [`FromForm`] types.
 ///
-/// This type implements the [`FromTransformedData`] trait. It provides a
+/// This type implements the [`FromData`] trait. It provides a
 /// generic means to parse arbitrary structures from incoming form data.
 ///
-/// # Strictness
+/// # Leniency
 ///
-/// A `Form<T>` will parse successfully from an incoming form only if the form
-/// contains the exact set of fields in `T`. Said another way, a `Form<T>` will
-/// error on missing and/or extra fields. For instance, if an incoming form
-/// contains the fields "a", "b", and "c" while `T` only contains "a" and "c",
-/// the form _will not_ parse as `Form<T>`. If you would like to admit extra
-/// fields without error, see [`LenientForm`](crate::request::LenientForm).
+/// A `Form<T>` will parse successfully from an incoming form if the form
+/// contains a superset of the fields in `T`. Said another way, a
+/// `Form<T>` automatically discards extra fields without error. For
+/// instance, if an incoming form contains the fields "a", "b", and "c" while
+/// `T` only contains "a" and "c", the form _will_ parse as `Form<T>`.
+///
 ///
 /// # Usage
 ///
@@ -24,7 +24,7 @@ use crate::form::prelude::*;
 /// The trait can be automatically derived; see the [`FromForm`] documentation
 /// for more information on deriving or implementing the trait.
 ///
-/// Because `Form` implements `FromTransformedData`, it can be used directly as a target of
+/// Because `Form` implements `FromData`, it can be used directly as a target of
 /// the `data = "<param>"` route parameter as long as its generic type
 /// implements the `FromForm` trait:
 ///

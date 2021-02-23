@@ -3,9 +3,9 @@ use crate::request::{Request, local_cache};
 use crate::data::{Data, Limits};
 use crate::outcome::{self, IntoOutcome, Outcome::*};
 
-/// Type alias for the `Outcome` of [`FromTransformedData`] and [`FromData`].
+/// Type alias for the `Outcome` of [`FromData`] and [`FromData`].
 ///
-/// [`FromTransformedData`]: crate::data::FromTransformedData
+/// [`FromData`]: crate::data::FromData
 pub type Outcome<S, E> = outcome::Outcome<S, (Status, E), Data>;
 
 impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {

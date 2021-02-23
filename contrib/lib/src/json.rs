@@ -30,8 +30,7 @@ use serde::de::{Deserialize, DeserializeOwned, Deserializer};
 #[doc(hidden)]
 pub use serde_json::{json_internal, json_internal_vec};
 
-/// The JSON type: implements [`FromTransformedData`] and [`Responder`], allowing you to
-/// easily consume and respond with JSON.
+/// The JSON data guard: easily consume and respond with JSON.
 ///
 /// ## Receiving JSON
 ///

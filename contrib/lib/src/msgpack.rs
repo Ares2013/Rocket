@@ -29,8 +29,8 @@ use serde::de::{Deserialize, DeserializeOwned};
 
 pub use rmp_serde::decode::Error;
 
-/// The `MsgPack` type: implements [`FromTransformedData`] and [`Responder`], allowing you
-/// to easily consume and respond with MessagePack data.
+/// The `MsgPack` data guard and responder: easily consume and respond with
+/// MessagePack.
 ///
 /// ## Receiving MessagePack
 ///

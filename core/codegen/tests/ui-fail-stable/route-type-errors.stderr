@@ -36,7 +36,7 @@ error[E0277]: the trait bound `Q: FromData` is not satisfied
 18 | fn f4(foo: Q) {}
    |            ^ the trait `FromData` is not implemented for `Q`
    |
-   = note: required because of the requirements on the impl of `FromTransformedData<'_>` for `Q`
+   = note: required because of the requirements on the impl of `FromData<'_>` for `Q`
 
 error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
    --> $DIR/route-type-errors.rs:21:10

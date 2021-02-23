@@ -2,35 +2,30 @@ use crate::form::prelude::*;
 
 use crate::http::uri::{Query, FromUriParam};
 
-/// A data guard for parsing [`FromForm`] types leniently.
+/// A form guard for parsing form types strictly.
 ///
-/// This type implements the [`FromTransformedData`] trait, and like [`Form`], provides a
-/// generic means to parse arbitrary structures from incoming form data. Unlike
-/// `Form`, this type uses a _lenient_ parsing strategy: forms that contains a
-/// superset of the expected fields (i.e, extra fields) will parse successfully.
+/// This type implements the [`FromForm`] trait and thus can be used as a
+/// generic parameter to the [`Form`] data guard: `Form<Strict<T>>`, where `T`
+/// implements `FromForm`. Unlike using `Form` directly, this type uses a
+/// _strict_ parsing strategy: forms that contains a superset of the expected
+/// fields (i.e, extra fields) will fail to parse.
 ///
-/// # Leniency
+/// # Strictness
 ///
-/// A `LenientForm<T>` will parse successfully from an incoming form if the form
-/// contains a superset of the fields in `T`. Said another way, a
-/// `LenientForm<T>` automatically discards extra fields without error. For
-/// instance, if an incoming form contains the fields "a", "b", and "c" while
-/// `T` only contains "a" and "c", the form _will_ parse as `LenientForm<T>`.
+/// A `Form<Strict<T>>` will parse successfully from an incoming form only if
+/// the form contains the exact set of fields in `T`. Said another way, a
+/// `Form<T>` will error on missing and/or extra fields. For instance, if an
+/// incoming form contains the fields "a", "b", and "c" while `T` only contains
+/// "a" and "c", the form _will not_ parse as `Form<T>`.
 ///
 /// # Usage
 ///
-/// The usage of a `LenientForm` type is equivalent to that of [`Form`], so we
-/// defer details to its documentation.
-///
-/// `LenientForm` implements `FromTransformedData`, so it can be used directly as a target
-/// of the `data = "<param>"` route parameter. For instance, if some structure
-/// of type `T` implements the `FromForm` trait, an incoming form can be
-/// automatically parsed into the `T` structure with the following route and
-/// handler:
+/// `Strict<T>` implements `FromForm` as long as `T` implements `FromForm`. As
+/// such, `Form<Strict<T>>` is a data guard:
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
-/// use rocket::request::LenientForm;
+/// use rocket::form::Strict;
 ///
 /// #[derive(FromForm)]
 /// struct UserInput {
@@ -38,22 +33,10 @@ use crate::http::uri::{Query, FromUriParam};
 /// }
 ///
 /// #[post("/submit", data = "<user_input>")]
-/// fn submit_task(user_input: LenientForm<UserInput>) -> String {
+/// fn submit_task(user_input: Form<Strict<UserInput>>) -> String {
 ///     format!("Your value: {}", user_input.value)
 /// }
 /// # fn main() {  }
-/// ```
-///
-/// ## Incoming Data Limits
-///
-/// A `LenientForm` obeys the same data limits as a `Form` and defaults to
-/// 32KiB. The limit can be increased by setting the `limits.forms`
-/// configuration parameter. For instance, to increase the forms limit to 512KiB
-/// for all environments, you may add the following to your `Rocket.toml`:
-///
-/// ```toml
-/// [global.limits]
-/// forms = 524288
 /// ```
 #[derive(Debug)]
 pub struct Strict<T>(T);
