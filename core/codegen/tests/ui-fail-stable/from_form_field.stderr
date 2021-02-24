@@ -83,10 +83,10 @@ error: [note] error occurred while deriving `FromFormField`
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: invalid value: expected string literal
-  --> $DIR/from_form_field.rs:29:20
+  --> $DIR/from_form_field.rs:29:21
    |
 29 |     #[field(value = 123)]
-   |                    ^^^
+   |                     ^^^
 
 error: [note] error occurred while deriving `FromFormField`
   --> $DIR/from_form_field.rs:27:10
@@ -97,10 +97,10 @@ error: [note] error occurred while deriving `FromFormField`
    = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: expected literal, found bare path "value"
-  --> $DIR/from_form_field.rs:35:12
+  --> $DIR/from_form_field.rs:35:13
    |
 35 |     #[field(value)]
-   |            ^^^^^
+   |             ^^^^^
 
 error: [note] error occurred while deriving `FromFormField`
   --> $DIR/from_form_field.rs:33:10

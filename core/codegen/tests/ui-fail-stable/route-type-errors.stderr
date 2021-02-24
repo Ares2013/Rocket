@@ -30,13 +30,16 @@ error[E0277]: the trait bound `Q: FromFormField<'_>` is not satisfied
    |
    = note: required because of the requirements on the impl of `FromForm<'_>` for `Q`
 
-error[E0277]: the trait bound `Q: FromData` is not satisfied
-  --> $DIR/route-type-errors.rs:18:12
-   |
-18 | fn f4(foo: Q) {}
-   |            ^ the trait `FromData` is not implemented for `Q`
-   |
-   = note: required because of the requirements on the impl of `FromData<'_>` for `Q`
+error[E0277]: the trait bound `Q: FromData<'_>` is not satisfied
+   --> $DIR/route-type-errors.rs:18:12
+    |
+18  | fn f4(foo: Q) {}
+    |            ^ the trait `FromData<'_>` is not implemented for `Q`
+    |
+   ::: $WORKSPACE/core/lib/src/data/from_data.rs
+    |
+    |     async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error>;
+    |                                         -- required by this bound in `rocket::data::FromData::from_data`
 
 error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
    --> $DIR/route-type-errors.rs:21:10
@@ -46,8 +49,8 @@ error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
     |
    ::: $WORKSPACE/core/lib/src/request/from_request.rs
     |
-    | #[crate::async_trait]
-    | --------------------- required by this bound in `from_request`
+    | pub trait FromRequest<'a, 'r>: Sized {
+    |                           -- required by this bound in `from_request`
 
 error[E0277]: the trait bound `Q: FromParam<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:21:18
@@ -65,8 +68,8 @@ error[E0277]: the trait bound `Q: FromRequest<'_, '_>` is not satisfied
     |
    ::: $WORKSPACE/core/lib/src/request/from_request.rs
     |
-    | #[crate::async_trait]
-    | --------------------- required by this bound in `from_request`
+    | pub trait FromRequest<'a, 'r>: Sized {
+    |                           -- required by this bound in `from_request`
 
 error[E0277]: the trait bound `Q: FromParam<'_>` is not satisfied
   --> $DIR/route-type-errors.rs:24:18
