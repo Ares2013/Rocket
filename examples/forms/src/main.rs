@@ -1,7 +1,7 @@
 #[macro_use]extern crate rocket;
 
 use rocket::http::Status;
-use rocket::form::{ContextForm, FromForm, FromFormField, Context};
+use rocket::form::{Form, Contextual, FromForm, FromFormField, Context};
 use rocket::data::TempFile;
 
 use rocket_contrib::serve::{StaticFiles, crate_relative};
@@ -35,10 +35,10 @@ enum Category {
 #[derive(Debug, FromForm)]
 struct Submission<'v> {
     #[field(validate = len(1..))]
-    title: String,
+    title: &'v str,
     date: time::Date,
     #[field(validate = len(1..=250))]
-    r#abstract: String,
+    r#abstract: &'v str,
     #[field(validate = ext("pdf"))]
     file: TempFile<'v>,
     #[field(validate = len(1..))]
@@ -50,11 +50,11 @@ struct Submission<'v> {
 #[derive(Debug, FromForm)]
 struct Account<'v> {
     #[field(validate = len(1..))]
-    name: String,
+    name: &'v str,
     password: Password<'v>,
     #[field(validate = contains('@'))]
     #[field(validate = omits(self.password.first))]
-    email: String,
+    email: &'v str,
 }
 
 #[derive(Debug, FromForm)]
@@ -69,9 +69,9 @@ fn index<'r>() -> Template {
 }
 
 #[post("/", data = "<form>")]
-fn submit<'r>(form: ContextForm<'r, Submit<'r>>) -> (Status, Template) {
+fn submit<'r>(form: Form<Contextual<'r, Submit<'r>>>) -> (Status, Template) {
     let template = match form.value {
-        Some(submission) => {
+        Some(ref submission) => {
             println!("submission: {:#?}", submission);
             Template::render("success", &form.context)
         }

@@ -3,7 +3,7 @@ use crate::request::{Request, local_cache};
 use crate::data::{Data, Limits};
 use crate::outcome::{self, IntoOutcome, Outcome::*};
 
-/// Type alias for the `Outcome` of [`FromData`] and [`FromData`].
+/// Type alias for the `Outcome` of [`FromData`].
 ///
 /// [`FromData`]: crate::data::FromData
 pub type Outcome<S, E> = outcome::Outcome<S, (Status, E), Data>;
@@ -33,10 +33,9 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///
 /// # Data Guards
 ///
-/// A data guard is a [request guard] that operates on a request's body data.
-/// Data guards validate and parse request body data via implementations of `FromData`.
-/// In other words, every type that implements `FromData` is a data guard and
-/// vice-versa.
+/// A data guard is a guard that operates on a request's body data. Data guards
+/// validate and parse request body data via implementations of `FromData`. In
+/// other words, a type is a data guard _iff_ it implements `FromData`.
 ///
 /// Data guards are the target of the `data` route attribute parameter:
 ///
@@ -45,7 +44,6 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 /// # type DataGuard = rocket::data::Data;
 /// #[post("/submit", data = "<var>")]
 /// fn submit(var: DataGuard) { /* ... */ }
-/// # fn main() { }
 /// ```
 ///
 /// A route can have at most one data guard. Above, `var` is used as the
@@ -88,9 +86,8 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///
 /// `Person` has a custom serialization format, so the built-in `Json` type
 /// doesn't suffice. The format is `<name>:<age>` with `Content-Type:
-/// application/x-person`. You'd like to use `Person` as a `FromData` type, or
-/// equivalently `FromData`, so that you can retrieve it directly from a
-/// client's request body:
+/// application/x-person`. You'd like to use `Person` as a data guard, so that
+/// you can retrieve it directly from a client's request body:
 ///
 /// ```rust
 /// # use rocket::post;
@@ -144,7 +141,7 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///             Err(e) => return Failure((Status::InternalServerError, Io(e))),
 ///         };
 ///
-///         // We store the str in request-local cache for long-lived borrows.
+///         // We store `string` in request-local cache for long-lived borrows.
 ///         let string = request::local_cache!(req, string);
 ///
 ///         // Split the string into two pieces at ':'.
@@ -163,7 +160,7 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///     }
 /// }
 ///
-/// // The following routes are now possible...
+/// // The following routes now typecheck...
 ///
 /// #[post("/person", data = "<person>")]
 /// fn person(person: Person<'_>) { /* .. */ }
@@ -176,10 +173,10 @@ impl<S, E> IntoOutcome<S, (Status, E), Data> for Result<S, E> {
 ///
 /// #[post("/person", data = "<person>")]
 /// fn person4(person: Person<'_>) -> &str {
+///     // Note that this is only possible because the data in `person` live
+///     // as long as the request through request-local cache.
 ///     person.name
 /// }
-///
-/// # fn main() {  }
 /// ```
 #[crate::async_trait]
 pub trait FromData<'r>: Sized {
@@ -210,6 +207,19 @@ impl<'r> FromData<'r> for Capped<String> {
 impl_strict_from_data_from_capped!(String);
 
 #[crate::async_trait]
+impl<'r> FromData<'r> for Capped<&'r str> {
+    type Error = std::io::Error;
+
+    async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
+        let capped = try_outcome!(<Capped<String>>::from_data(req, data).await);
+        let string = capped.map(|s| local_cache!(req, s).as_str());
+        Success(string)
+    }
+}
+
+impl_strict_from_data_from_capped!(&'r str);
+
+#[crate::async_trait]
 impl<'r> FromData<'r> for Capped<&'r RawStr> {
     type Error = std::io::Error;
 
@@ -233,6 +243,19 @@ impl<'r> FromData<'r> for Capped<std::borrow::Cow<'_, str>> {
 }
 
 impl_strict_from_data_from_capped!(std::borrow::Cow<'_, str>);
+
+#[crate::async_trait]
+impl<'r> FromData<'r> for Capped<&'r [u8]> {
+    type Error = std::io::Error;
+
+    async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
+        let capped = try_outcome!(<Capped<Vec<u8>>>::from_data(req, data).await);
+        let raw = capped.map(|b| local_cache!(req, b).as_slice());
+        Success(raw)
+    }
+}
+
+impl_strict_from_data_from_capped!(&'r [u8]);
 
 #[crate::async_trait]
 impl<'r> FromData<'r> for Capped<Vec<u8>> {

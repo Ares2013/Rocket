@@ -1,5 +1,6 @@
-use crate::form::prelude::*;
+use std::ops::{Deref, DerefMut};
 
+use crate::form::prelude::*;
 use crate::http::uri::{Query, FromUriParam};
 
 /// A form guard for parsing form types strictly.
@@ -12,20 +13,20 @@ use crate::http::uri::{Query, FromUriParam};
 ///
 /// # Strictness
 ///
-/// A `Form<Strict<T>>` will parse successfully from an incoming form only if
+/// A `Strict<T>` will parse successfully from an incoming form only if
 /// the form contains the exact set of fields in `T`. Said another way, a
-/// `Form<T>` will error on missing and/or extra fields. For instance, if an
+/// `Strict<T>` will error on missing and/or extra fields. For instance, if an
 /// incoming form contains the fields "a", "b", and "c" while `T` only contains
-/// "a" and "c", the form _will not_ parse as `Form<T>`.
+/// "a" and "c", the form _will not_ parse as `Strict<T>`.
 ///
 /// # Usage
 ///
-/// `Strict<T>` implements `FromForm` as long as `T` implements `FromForm`. As
+/// `Strict<T>` implements [`FromForm`] as long as `T` implements `FromForm`. As
 /// such, `Form<Strict<T>>` is a data guard:
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
-/// use rocket::form::Strict;
+/// use rocket::form::{Form, Strict};
 ///
 /// #[derive(FromForm)]
 /// struct UserInput {
@@ -36,19 +37,22 @@ use crate::http::uri::{Query, FromUriParam};
 /// fn submit_task(user_input: Form<Strict<UserInput>>) -> String {
 ///     format!("Your value: {}", user_input.value)
 /// }
-/// # fn main() {  }
 /// ```
 #[derive(Debug)]
 pub struct Strict<T>(T);
 
 impl<T> Strict<T> {
-    /// Consumes `self` and returns the parsed value.
+    /// Consumes `self` and returns the inner value.
+    ///
+    /// Note that since `Strict` implements [`Deref`] and [`DerefMut`] with
+    /// target `T`, reading and writing an inner value can be accomplished
+    /// transparently.
     ///
     /// # Example
     ///
     /// ```rust
     /// # #[macro_use] extern crate rocket;
-    /// use rocket::request::LenientForm;
+    /// use rocket::form::{Form, Strict};
     ///
     /// #[derive(FromForm)]
     /// struct MyForm {
@@ -56,8 +60,12 @@ impl<T> Strict<T> {
     /// }
     ///
     /// #[post("/submit", data = "<form>")]
-    /// fn submit(form: LenientForm<MyForm>) -> String {
-    ///     form.into_inner().field
+    /// fn submit(form: Form<Strict<MyForm>>) -> String {
+    ///     // We can read or mutate a value transparently:
+    ///     let field: &str = &form.field;
+    ///
+    ///     // To gain ownership, however, use `into_inner()`:
+    ///     form.into_inner().into_inner().field
     /// }
     /// ```
     pub fn into_inner(self) -> T {
@@ -90,7 +98,7 @@ impl<'v, T: FromForm<'v>> FromForm<'v> for Strict<T> {
     }
 }
 
-impl<T> std::ops::Deref for Strict<T> {
+impl<T> Deref for Strict<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -98,9 +106,16 @@ impl<T> std::ops::Deref for Strict<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for Strict<T> {
+impl<T> DerefMut for Strict<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<T> From<T> for Strict<T> {
+    #[inline]
+    fn from(val: T) -> Strict<T> {
+        Strict(val)
     }
 }
 

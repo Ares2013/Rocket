@@ -82,8 +82,62 @@ impl<I, T: Contains<I>> Contains<I> for &T {
     }
 }
 
+impl Contains<&str> for str {
+    fn contains(&self, string: &str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<&&str> for str {
+    fn contains(&self, string: &&str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<char> for str {
+    fn contains(&self, c: char) -> bool {
+        <str>::contains(self, c)
+    }
+}
+
+impl Contains<&char> for str {
+    fn contains(&self, c: &char) -> bool {
+        <str>::contains(self, *c)
+    }
+}
+
+impl Contains<&str> for &str {
+    fn contains(&self, string: &str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<&&str> for &str {
+    fn contains(&self, string: &&str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<char> for &str {
+    fn contains(&self, c: char) -> bool {
+        <str>::contains(self, c)
+    }
+}
+
+impl Contains<&char> for &str {
+    fn contains(&self, c: &char) -> bool {
+        <str>::contains(self, *c)
+    }
+}
+
 impl Contains<&str> for String {
     fn contains(&self, string: &str) -> bool {
+        <str>::contains(self, string)
+    }
+}
+
+impl Contains<&&str> for String {
+    fn contains(&self, string: &&str) -> bool {
         <str>::contains(self, string)
     }
 }
@@ -91,6 +145,12 @@ impl Contains<&str> for String {
 impl Contains<char> for String {
     fn contains(&self, c: char) -> bool {
         <str>::contains(self, c)
+    }
+}
+
+impl Contains<&char> for String {
+    fn contains(&self, c: &char) -> bool {
+        <str>::contains(self, *c)
     }
 }
 
@@ -103,18 +163,6 @@ impl<T: PartialEq> Contains<T> for Vec<T> {
 impl<T: PartialEq> Contains<&T> for Vec<T> {
     fn contains(&self, item: &T) -> bool {
         <[T]>::contains(self, item)
-    }
-}
-
-impl Contains<&&str> for String {
-    fn contains(&self, string: &&str) -> bool {
-        <str>::contains(self, string)
-    }
-}
-
-impl Contains<&char> for String {
-    fn contains(&self, c: &char) -> bool {
-        <str>::contains(self, *c)
     }
 }
 

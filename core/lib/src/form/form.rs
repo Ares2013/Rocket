@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::request::Request;
 use crate::data::{Data, FromData, Outcome};
 use crate::http::{RawStr, ext::IntoOwned};
@@ -6,17 +8,20 @@ use crate::form::prelude::*;
 
 /// A data guard for [`FromForm`] types.
 ///
-/// This type implements the [`FromData`] trait. It provides a
-/// generic means to parse arbitrary structures from incoming form data.
+/// This type implements the [`FromData`] trait. It provides a generic means to
+/// parse arbitrary structures from incoming form data of any kind.
+///
+/// See the [forms guide](https://rocket.rs/master/guide/requests#forms) for
+/// general form support documentation.
 ///
 /// # Leniency
 ///
 /// A `Form<T>` will parse successfully from an incoming form if the form
-/// contains a superset of the fields in `T`. Said another way, a
-/// `Form<T>` automatically discards extra fields without error. For
-/// instance, if an incoming form contains the fields "a", "b", and "c" while
-/// `T` only contains "a" and "c", the form _will_ parse as `Form<T>`.
-///
+/// contains a superset of the fields in `T`. Said another way, a `Form<T>`
+/// automatically discards extra fields without error. For instance, if an
+/// incoming form contains the fields "a", "b", and "c" while `T` only contains
+/// "a" and "c", the form _will_ parse as `Form<T>`. To parse strictly, use the
+/// [`Strict`](crate::form::Strict) form guard.
 ///
 /// # Usage
 ///
@@ -30,20 +35,18 @@ use crate::form::prelude::*;
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
-/// use rocket::request::Form;
+/// use rocket::form::Form;
 /// use rocket::http::RawStr;
 ///
 /// #[derive(FromForm)]
-/// struct UserInput<'f> {
-///     // The raw, undecoded value. You _probably_ want `String` instead.
-///     value: &'f RawStr
+/// struct UserInput<'r> {
+///     value: &'r str
 /// }
 ///
 /// #[post("/submit", data = "<user_input>")]
-/// fn submit_task(user_input: Form<UserInput>) -> String {
+/// fn submit_task(user_input: Form<UserInput<'_>>) -> String {
 ///     format!("Your value: {}", user_input.value)
 /// }
-/// # fn main() {  }
 /// ```
 ///
 /// A type of `Form<T>` automatically dereferences into an `&T` or `&mut T`,
@@ -52,67 +55,60 @@ use crate::form::prelude::*;
 /// can access fields of `T` transparently through a `Form<T>`, as seen above
 /// with `user_input.value`.
 ///
-/// For posterity, the owned analog of the `UserInput` type above is:
-///
-/// ```rust
-/// struct OwnedUserInput {
-///     // The decoded value. You _probably_ want this.
-///     value: String
-/// }
-/// ```
-///
-/// A handler that handles a form of this type can similarly by written:
-///
-/// ```rust
-/// # #![allow(deprecated, unused_attributes)]
-/// # #[macro_use] extern crate rocket;
-/// # use rocket::request::Form;
-/// # #[derive(FromForm)]
-/// # struct OwnedUserInput {
-/// #     value: String
-/// # }
-/// #[post("/submit", data = "<user_input>")]
-/// fn submit_task(user_input: Form<OwnedUserInput>) -> String {
-///     format!("Your value: {}", user_input.value)
-/// }
-/// # fn main() {  }
-/// ```
-///
-/// Note that no lifetime annotations are required in either case.
-///
-/// ## `&RawStr` vs. `String`
-///
-/// Whether you should use a `&RawStr` or `String` in your `FromForm` type
-/// depends on your use case. The primary question to answer is: _Can the input
-/// contain characters that must be URL encoded?_ Note that this includes common
-/// characters such as spaces. If so, then you must use `String`, whose
-/// [`FromFormValue`](crate::request::FromFormValue) implementation automatically URL
-/// decodes the value. Because the `&RawStr` references will refer directly to
-/// the underlying form data, they will be raw and URL encoded.
-///
-/// If it is known that string values will not contain URL encoded characters,
-/// or you wish to handle decoding and validation yourself, using `&RawStr` will
-/// result in fewer allocation and is thus preferred.
-///
-/// ## Incoming Data Limits
+/// ## Data Limits
 ///
 /// The default size limit for incoming form data is 32KiB. Setting a limit
 /// protects your application from denial of service (DOS) attacks and from
 /// resource exhaustion through high memory consumption. The limit can be
-/// increased by setting the `limits.forms` configuration parameter. For
-/// instance, to increase the forms limit to 512KiB for all environments, you
-/// may add the following to your `Rocket.toml`:
+/// modified by setting the `limits.form` configuration parameter. For instance,
+/// to increase the forms limit to 512KiB for all environments, you may add the
+/// following to your `Rocket.toml`:
 ///
 /// ```toml
 /// [global.limits]
-/// forms = 524288
+/// form = 524288
 /// ```
+///
+/// See the [`Limits`](crate::data::Limits) docs for more.
 #[derive(Debug)]
 pub struct Form<T>(T);
 
 impl<T> Form<T> {
+    /// Consumes `self` and returns the inner value.
+    ///
+    /// Note that since `Form` implements [`Deref`] and [`DerefMut`] with
+    /// target `T`, reading and writing an inner value can be accomplished
+    /// transparently.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate rocket;
+    /// use rocket::form::Form;
+    ///
+    /// #[derive(FromForm)]
+    /// struct MyForm {
+    ///     field: String,
+    /// }
+    ///
+    /// #[post("/submit", data = "<form>")]
+    /// fn submit(form: Form<MyForm>) -> String {
+    ///     // We can read or mutate a value transparently:
+    ///     let field: &str = &form.field;
+    ///
+    ///     // To gain ownership, however, use `into_inner()`:
+    ///     form.into_inner().field
+    /// }
+    /// ```
     pub fn into_inner(self) -> T {
         self.0
+    }
+}
+
+impl<T> From<T> for Form<T> {
+    #[inline]
+    fn from(val: T) -> Form<T> {
+        Form(val)
     }
 }
 
@@ -149,7 +145,7 @@ impl<T: for<'a> FromForm<'a> + 'static> Form<T> {
     }
 }
 
-impl<T> std::ops::Deref for Form<T> {
+impl<T> Deref for Form<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -157,7 +153,7 @@ impl<T> std::ops::Deref for Form<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for Form<T> {
+impl<T> DerefMut for Form<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

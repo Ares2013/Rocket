@@ -47,6 +47,28 @@ macro_rules! assert_value_parse_eq {
 }
 
 #[test]
+fn time() {
+    use time::{date, time, Date, Time, PrimitiveDateTime as DateTime};
+
+    assert_values_parse_eq! {
+        &["=2010-10-20"] => Date = date!(2010-10-20),
+        &["=2012-01-20"] => Date = date!(2012-01-20),
+        &["=2020-01-20T02:30"] => DateTime = DateTime::new(date!(2020-01-20), time!(2:30)),
+        &["=2020-01-01T02:30:12"] => DateTime = DateTime::new(date!(2020-01-01), time!(2:30:12)),
+        &["=20:20:52"] => Time = time!(20:20:52),
+        &["=06:08"] => Time = time!(06:08),
+    }
+}
+
+#[test]
+fn bool() {
+    assert_values_parse_eq! {
+        &["=true", "=yes", "=on"] => Vec<bool> = vec![true, true, true],
+        &["=false", "=no", "=off"] => Vec<bool> = vec![false, false, false],
+    }
+}
+
+#[test]
 fn potpourri() {
     assert_values_parse_eq! {
         &["a.b=10"] => usize = 10,

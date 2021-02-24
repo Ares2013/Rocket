@@ -2,24 +2,39 @@ use serde::Serialize;
 use indexmap::{IndexMap, IndexSet};
 
 use crate::form::prelude::*;
-use crate::request::Request;
-use crate::data::{Data, FromData, Outcome};
 use crate::http::Status;
 
+/// An infallible form guard that records form fields while parsing any form
+/// type.
+#[derive(Debug)]
+pub struct Contextual<'v, T> {
+    pub value: Option<T>,
+    pub context: Context<'v>
+}
+
+/// A form context containing received fields, values, and encountered errors.
+///
+/// # Serialization
+///
+/// When a value of this type is serialized, a `struct` or map with the
+/// following fields is emitted:
+///
+/// | field         | type              | description                                    |
+/// |---------------|-------------------|------------------------------------------------|
+/// | `errors`      | &str => &[Error]  | map from a field name to errors it encountered |
+/// | `values`      | &str => &[&str]   | map from a field name to its submitted values  |
+/// | `data_values` | &[&str]           | field names of all data fields received        |
+/// | `form_errors` | &[Error]          | errors not corresponding to specific fields    |
+///
+/// See [`Error`] for details on how an `Error` is serialized.
 #[derive(Debug, Default, Serialize)]
 pub struct Context<'v> {
-    errors: IndexMap<NameViewCow<'v>, Errors<'v>>,
+    errors: IndexMap<NameBuf<'v>, Errors<'v>>,
     values: IndexMap<&'v Name, Vec<&'v str>>,
     data_values: IndexSet<&'v Name>,
     form_errors: Errors<'v>,
     #[serde(skip)]
     status: Status,
-}
-
-#[derive(Debug)]
-pub struct ContextForm<'v, T> {
-    pub value: Option<T>,
-    pub context: Context<'v>
 }
 
 impl<'v> Context<'v> {
@@ -86,27 +101,27 @@ impl<'f> From<Errors<'f>> for Context<'f> {
     }
 }
 
-impl<'v, T> From<Errors<'v>> for ContextForm<'v, T> {
-    fn from(e: Errors<'v>) -> Self {
-        ContextForm { value: None, context: Context::from(e) }
-    }
-}
+// impl<'v, T> From<Errors<'v>> for Contextual<'v, T> {
+//     fn from(e: Errors<'v>) -> Self {
+//         Contextual { value: None, context: Context::from(e) }
+//     }
+// }
+
+// #[crate::async_trait]
+// impl<'r, T: FromForm<'r>> FromData<'r> for Contextual<'r, T> {
+//     type Error = std::convert::Infallible;
+//
+//     async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
+//         match Form::<Contextual<'r, T>>::from_data(req, data).await {
+//             Outcome::Success(form) => Outcome::Success(form.into_inner()),
+//             Outcome::Failure((_, e)) => Outcome::Success(Contextual::from(e)),
+//             Outcome::Forward(d) => Outcome::Forward(d)
+//         }
+//     }
+// }
 
 #[crate::async_trait]
-impl<'r, T: FromForm<'r>> FromData<'r> for ContextForm<'r, T> {
-    type Error = std::convert::Infallible;
-
-    async fn from_data(req: &'r Request<'_>, data: Data) -> Outcome<Self, Self::Error> {
-        match Form::<ContextForm<'r, T>>::from_data(req, data).await {
-            Outcome::Success(form) => Outcome::Success(form.into_inner()),
-            Outcome::Failure((_, e)) => Outcome::Success(ContextForm::from(e)),
-            Outcome::Forward(d) => Outcome::Forward(d)
-        }
-    }
-}
-
-#[crate::async_trait]
-impl<'v, T: FromForm<'v>> FromForm<'v> for ContextForm<'v, T> {
+impl<'v, T: FromForm<'v>> FromForm<'v> for Contextual<'v, T> {
     type Context = (<T as FromForm<'v>>::Context, Context<'v>);
 
     fn init(opts: Options) -> Self::Context {
@@ -139,7 +154,7 @@ impl<'v, T: FromForm<'v>> FromForm<'v> for ContextForm<'v, T> {
             }
         };
 
-        Ok(ContextForm { value, context })
+        Ok(Contextual { value, context })
     }
 
 

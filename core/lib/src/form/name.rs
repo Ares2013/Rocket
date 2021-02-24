@@ -1,3 +1,5 @@
+//! Types for handling field names, name keys, and key indices.
+
 use std::ops::Deref;
 use std::borrow::Cow;
 
@@ -5,19 +7,58 @@ use ref_cast::RefCast;
 
 use crate::http::RawStr;
 
+/// A field name composed of keys.
+///
+/// A form field name is composed of _keys_, delimited by `.` or `[]`. Keys, in
+/// turn, are composed of _indices_, delimited by `:`. The graphic below
+/// illustrates this composition for a single field in `$name=$value` format:
+///
+/// ```text
+///       food.bart[bar:foo].blam[0_0][1000]=some-value
+/// name  |--------------------------------|
+/// key   |--| |--| |-----|  |--| |-|  |--|
+/// index |--| |--| |-| |-|  |--| |-|  |--|
+/// ```
+///
+/// A `Name` is a wrapper around the field name string with methods to easily
+/// access its sub-components.
+///
+/// # Serialization
+///
+/// A value of this type is serialized exactly as an `&str` consisting of the
+/// entire field name.
 #[repr(transparent)]
 #[derive(RefCast)]
 pub struct Name(str);
 
 impl Name {
+    /// Wraps a string as a `Name`. This is cost-free.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Name;
+    ///
+    /// let name = Name::new("a.b.c");
+    /// assert_eq!(name.as_str(), "a.b.c");
+    /// ```
     pub fn new<S: AsRef<str> + ?Sized>(string: &S) -> &Name {
         Name::ref_cast(string.as_ref())
     }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
+    /// Returns an iterator over the keys of `self`, including empty keys.
+    ///
+    /// See the [top-level docs](Self) for a description of "keys".
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Name;
+    ///
+    /// let name = Name::new("apple.b[foo:bar]zoo.[barb].bat");
+    /// let keys: Vec<_> = name.keys().map(|k| k.as_str()).collect();
+    /// assert_eq!(keys, &["apple", "b", "foo:bar", "zoo", "", "barb", "bat"]);
+    /// ```
     pub fn keys(&self) -> impl Iterator<Item = &Key> {
         struct Keys<'v>(NameView<'v>);
 
@@ -38,6 +79,22 @@ impl Name {
         Keys(NameView::new(self))
     }
 
+    /// Returns an iterator over overlapping name prefixes of `self`, each
+    /// succeeding prefix containing one more key than the previous.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Name;
+    ///
+    /// let name = Name::new("apple.b[foo:bar]");
+    /// let prefixes: Vec<_> = name.prefixes().map(|p| p.as_str()).collect();
+    /// assert_eq!(prefixes, &["apple", "apple.b", "apple.b[foo:bar]"]);
+    ///
+    /// let name = Name::new("a.b.[foo]");
+    /// let prefixes: Vec<_> = name.prefixes().map(|p| p.as_str()).collect();
+    /// assert_eq!(prefixes, &["a", "a.b", "a.b.", "a.b.[foo]"]);
+    /// ```
     pub fn prefixes(&self) -> impl Iterator<Item = &Name> {
         struct Prefixes<'v>(NameView<'v>);
 
@@ -56,6 +113,20 @@ impl Name {
         }
 
         Prefixes(NameView::new(self))
+    }
+
+    /// Borrows the underlying string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Name;
+    ///
+    /// let name = Name::new("a.b.c");
+    /// assert_eq!(name.as_str(), "a.b.c");
+    /// ```
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -161,21 +232,74 @@ impl std::fmt::Debug for Name {
     }
 }
 
+/// A field name key composed of indices.
+///
+/// A form field name key is composed of _indices_, delimited by `:`. The
+/// graphic below illustrates this composition for a single field in
+/// `$name=$value` format:
+///
+/// ```text
+///       food.bart[bar:foo:baz]=some-value
+/// name  |--------------------|
+/// key   |--| |--| |---------|
+/// index |--| |--| |-| |-| |-|
+/// ```
+///
+/// A `Key` is a wrapper around a given key string with methods to easily access
+/// its indices.
+///
+/// # Serialization
+///
+/// A value of this type is serialized exactly as an `&str` consisting of the
+/// entire key.
 #[repr(transparent)]
 #[derive(RefCast, Debug, PartialEq, Eq, Hash)]
 pub struct Key(str);
 
 impl Key {
+    /// Wraps a string as a `Key`. This is cost-free.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Key;
+    ///
+    /// let key = Key::new("a:b:c");
+    /// assert_eq!(key.as_str(), "a:b:c");
+    /// ```
     pub fn new<S: AsRef<str> + ?Sized>(string: &S) -> &Key {
         Key::ref_cast(string.as_ref())
     }
 
-    pub fn as_str(&self) -> &str {
-        &*self
-    }
-
+    /// Returns an iterator over the indices of `self`, including empty indices.
+    ///
+    /// See the [top-level docs](Self) for a description of "indices".
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Key;
+    ///
+    /// let key = Key::new("foo:bar::baz:a.b.c");
+    /// let indices: Vec<_> = key.indices().collect();
+    /// assert_eq!(indices, &["foo", "bar", "", "baz", "a.b.c"]);
+    /// ```
     pub fn indices(&self) -> impl Iterator<Item = &str> {
         self.split(':')
+    }
+
+    /// Borrows the underlying string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::Key;
+    ///
+    /// let key = Key::new("a:b:c");
+    /// assert_eq!(key.as_str(), "a:b:c");
+    /// ```
+    pub fn as_str(&self) -> &str {
+        &*self
     }
 }
 
@@ -249,6 +373,54 @@ impl std::fmt::Display for Key {
     }
 }
 
+/// A sliding-prefix view into a [`Name`].
+///
+/// A [`NameView`] maintains a sliding key view into a [`Name`]. The current key
+/// ([`key()`]) can be [`shift()`ed](NameView::shift()) one key to the right.
+/// The `Name` prefix including the current key can be extracted via
+/// [`as_name()`] and the prefix _not_ including the current key via
+/// [`parent()`].
+///
+/// [`key()`]: NameView::key()
+/// [`as_name()`]: NameView::as_name()
+/// [`parent()`]: NameView::parent()
+///
+/// This is best illustrated via an example:
+///
+/// ```rust
+/// use rocket::form::name::NameView;
+///
+/// // The view begins at the first key. Illustrated: `(a).b[c:d]` where
+/// // parenthesis enclose the current key.
+/// let mut view = NameView::new("a.b[c:d]");
+/// assert_eq!(view.key().unwrap(), "a");
+/// assert_eq!(view.as_name(), "a");
+/// assert_eq!(view.parent(), None);
+///
+/// // Shifted once to the right views the second key: `a.(b)[c:d]`.
+/// view.shift();
+/// assert_eq!(view.key().unwrap(), "b");
+/// assert_eq!(view.as_name(), "a.b");
+/// assert_eq!(view.parent().unwrap(), "a");
+///
+/// // Shifting again now has predictable results: `a.b[(c:d)]`.
+/// view.shift();
+/// assert_eq!(view.key().unwrap(), "c:d");
+/// assert_eq!(view.as_name(), "a.b[c:d]");
+/// assert_eq!(view.parent().unwrap(), "a.b");
+///
+/// // Shifting past the end means we have no further keys.
+/// view.shift();
+/// assert_eq!(view.key(), None);
+/// assert_eq!(view.key_lossy(), "");
+/// assert_eq!(view.as_name(), "a.b[c:d]");
+/// assert_eq!(view.parent().unwrap(), "a.b[c:d]");
+///
+/// view.shift();
+/// assert_eq!(view.key(), None);
+/// assert_eq!(view.as_name(), "a.b[c:d]");
+/// assert_eq!(view.parent().unwrap(), "a.b[c:d]");
+/// ```
 #[derive(Copy, Clone)]
 pub struct NameView<'v> {
     name: &'v Name,
@@ -257,28 +429,37 @@ pub struct NameView<'v> {
 }
 
 impl<'v> NameView<'v> {
+    /// Initializes a new `NameView` at the first key of `name`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a.b[c:d]");
+    /// assert_eq!(view.key().unwrap(), "a");
+    /// assert_eq!(view.as_name(), "a");
+    /// assert_eq!(view.parent(), None);
+    /// ```
     pub fn new<N: Into<&'v Name>>(name: N) -> Self {
         let mut view = NameView { name: name.into(), start: 0, end: 0 };
         view.shift();
         view
     }
 
-    fn is_terminal(&self) -> bool {
-        self.start == self.name.len()
-    }
-
-    pub fn parent(&self) -> Option<&'v Name> {
-        if self.start > 0 {
-            Some(&self.name[..self.start])
-        } else {
-            None
-        }
-    }
-
-    pub fn as_name(&self) -> &'v Name {
-        &self.name[..self.end]
-    }
-
+    /// Shifts the current key once to the right.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a.b[c:d]");
+    /// assert_eq!(view.key().unwrap(), "a");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.key().unwrap(), "b");
+    /// ```
     pub fn shift(&mut self) {
         const START_DELIMS: &'static [char] = &['.', '['];
 
@@ -311,7 +492,51 @@ impl<'v> NameView<'v> {
         };
     }
 
-    /// Allows empty keys.
+    /// Returns the key currently viewed by `self` if it is non-empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a[b]");
+    /// assert_eq!(view.key().unwrap(), "a");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.key().unwrap(), "b");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.key(), None);
+    /// # view.shift(); assert_eq!(view.key(), None);
+    /// # view.shift(); assert_eq!(view.key(), None);
+    /// ```
+    pub fn key(&self) -> Option<&'v Key> {
+        let lossy_key = self.key_lossy();
+        if lossy_key.is_empty() {
+            return None;
+        }
+
+        Some(lossy_key)
+    }
+
+    /// Returns the key currently viewed by `self`, even if it is non-empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a[b]");
+    /// assert_eq!(view.key_lossy(), "a");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.key_lossy(), "b");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.key_lossy(), "");
+    /// # view.shift(); assert_eq!(view.key_lossy(), "");
+    /// # view.shift(); assert_eq!(view.key_lossy(), "");
+    /// ```
     pub fn key_lossy(&self) -> &'v Key {
         let view = &self.name[self.start..self.end];
         let key = match view.as_bytes().get(0) {
@@ -323,18 +548,76 @@ impl<'v> NameView<'v> {
         key.0.into()
     }
 
-    /// Does not allow empty keys.
-    pub fn key(&self) -> Option<&'v Key> {
-        let lossy_key = self.key_lossy();
-        if lossy_key.is_empty() {
-            return None;
-        }
-
-        Some(lossy_key)
+    /// Returns the `Name` _up to and including_ the current key.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a[b]");
+    /// assert_eq!(view.as_name(), "a");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.as_name(), "a[b]");
+    /// # view.shift(); assert_eq!(view.as_name(), "a[b]");
+    /// # view.shift(); assert_eq!(view.as_name(), "a[b]");
+    /// ```
+    pub fn as_name(&self) -> &'v Name {
+        &self.name[..self.end]
     }
 
+    /// Returns the `Name` _prior to_ the current key.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a[b]");
+    /// assert_eq!(view.parent(), None);
+    ///
+    /// view.shift();
+    /// assert_eq!(view.parent().unwrap(), "a");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.parent().unwrap(), "a[b]");
+    /// # view.shift(); assert_eq!(view.parent().unwrap(), "a[b]");
+    /// # view.shift(); assert_eq!(view.parent().unwrap(), "a[b]");
+    /// ```
+    pub fn parent(&self) -> Option<&'v Name> {
+        if self.start > 0 {
+            Some(&self.name[..self.start])
+        } else {
+            None
+        }
+    }
+
+    /// Returns the underlying `Name`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameView;
+    ///
+    /// let mut view = NameView::new("a[b]");
+    /// assert_eq!(view.source(), "a[b]");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.source(), "a[b]");
+    ///
+    /// view.shift();
+    /// assert_eq!(view.source(), "a[b]");
+    ///
+    /// # view.shift(); assert_eq!(view.source(), "a[b]");
+    /// # view.shift(); assert_eq!(view.source(), "a[b]");
+    /// ```
     pub fn source(&self) -> &'v Name {
         self.name
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.start == self.name.len()
     }
 }
 
@@ -376,14 +659,73 @@ impl std::borrow::Borrow<Name> for NameView<'_> {
     }
 }
 
+/// A potentially owned [`Name`].
+///
+/// Constructible from a [`NameView`], [`Name`], `&str`, or `String`, a
+/// `NameBuf` acts much like a [`Name`] but can be converted into an owned
+/// version via [`IntoOwned`](crate::http::ext::IntoOwned).
+///
+/// ```rust
+/// use rocket::form::name::NameBuf;
+/// use rocket::http::ext::IntoOwned;
+///
+/// let alloc = String::from("a.b.c");
+/// let name = NameBuf::from(alloc.as_str());
+/// let owned: NameBuf<'static> = name.into_owned();
+/// ```
 #[derive(Clone)]
-pub struct NameViewCow<'v> {
+pub struct NameBuf<'v> {
     left: &'v Name,
     right: Cow<'v, str>,
 }
 
-impl crate::http::ext::IntoOwned for NameViewCow<'_> {
-    type Owned = NameViewCow<'static>;
+impl<'v> NameBuf<'v> {
+    #[inline]
+    fn split(&self) -> (&Name, &Name) {
+        (self.left, Name::new(&self.right))
+    }
+
+    /// Returns an iterator over the keys of `self`, including empty keys.
+    ///
+    /// See [`Name`] for a description of "keys".
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameBuf;
+    ///
+    /// let name = NameBuf::from("apple.b[foo:bar]zoo.[barb].bat");
+    /// let keys: Vec<_> = name.keys().map(|k| k.as_str()).collect();
+    /// assert_eq!(keys, &["apple", "b", "foo:bar", "zoo", "", "barb", "bat"]);
+    /// ```
+    #[inline]
+    pub fn keys(&self) -> impl Iterator<Item = &Key> {
+        let (left, right) = self.split();
+        left.keys().chain(right.keys())
+    }
+
+    /// Returns `true` if `self` is empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rocket::form::name::NameBuf;
+    ///
+    /// let name = NameBuf::from("apple.b[foo:bar]zoo.[barb].bat");
+    /// assert!(!name.is_empty());
+    ///
+    /// let name = NameBuf::from("");
+    /// assert!(name.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        let (left, right) = self.split();
+        left.is_empty() && right.is_empty()
+    }
+}
+
+impl crate::http::ext::IntoOwned for NameBuf<'_> {
+    type Owned = NameBuf<'static>;
 
     fn into_owned(self) -> Self::Owned {
         let right = match (self.left, self.right) {
@@ -393,26 +735,11 @@ impl crate::http::ext::IntoOwned for NameViewCow<'_> {
             (l, r) => format!("{}.{}", l, r).into(),
         };
 
-        NameViewCow { left: "".into(), right }
+        NameBuf { left: "".into(), right }
     }
 }
 
-impl<'v> NameViewCow<'v> {
-    pub fn is_empty(&self) -> bool {
-        self.left.is_empty() && self.right.is_empty()
-    }
-
-    fn split(&self) -> (&Name, &Name) {
-        (self.left, Name::new(&self.right))
-    }
-
-    pub fn keys(&self) -> impl Iterator<Item = &Key> {
-        let (left, right) = self.split();
-        left.keys().chain(right.keys())
-    }
-}
-
-impl serde::Serialize for NameViewCow<'_> {
+impl serde::Serialize for NameBuf<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: serde::Serializer
     {
@@ -420,46 +747,55 @@ impl serde::Serialize for NameViewCow<'_> {
     }
 }
 
-impl<'v> From<NameView<'v>> for NameViewCow<'v> {
+impl<'v> From<NameView<'v>> for NameBuf<'v> {
     fn from(nv: NameView<'v>) -> Self {
-        NameViewCow { left: nv.as_name(), right: Cow::Borrowed("") }
+        NameBuf { left: nv.as_name(), right: Cow::Borrowed("") }
     }
 }
 
-impl<'v> From<(Option<&'v Name>, Cow<'v, str>)> for NameViewCow<'v> {
+impl<'v> From<&'v Name> for NameBuf<'v> {
+    fn from(name: &'v Name) -> Self {
+        NameBuf { left: name, right: Cow::Borrowed("") }
+    }
+}
+
+impl<'v> From<&'v str> for NameBuf<'v> {
+    fn from(name: &'v str) -> Self {
+        NameBuf::from((None, Cow::Borrowed(name)))
+    }
+}
+
+impl<'v> From<String> for NameBuf<'v> {
+    fn from(name: String) -> Self {
+        NameBuf::from((None, Cow::Owned(name)))
+    }
+}
+
+#[doc(hidden)]
+impl<'v> From<(Option<&'v Name>, Cow<'v, str>)> for NameBuf<'v> {
     fn from((prefix, right): (Option<&'v Name>, Cow<'v, str>)) -> Self {
         match prefix {
-            Some(left) => NameViewCow { left, right },
-            None => NameViewCow { left: "".into(), right }
+            Some(left) => NameBuf { left, right },
+            None => NameBuf { left: "".into(), right }
         }
     }
 }
 
-impl<'v> From<(Option<&'v Name>, &'v str)> for NameViewCow<'v> {
+#[doc(hidden)]
+impl<'v> From<(Option<&'v Name>, &'v str)> for NameBuf<'v> {
     fn from((prefix, suffix): (Option<&'v Name>, &'v str)) -> Self {
-        NameViewCow::from((prefix, Cow::Borrowed(suffix)))
+        NameBuf::from((prefix, Cow::Borrowed(suffix)))
     }
 }
 
-impl<'v> From<(&'v Name, &'v str)> for NameViewCow<'v> {
+#[doc(hidden)]
+impl<'v> From<(&'v Name, &'v str)> for NameBuf<'v> {
     fn from((prefix, suffix): (&'v Name, &'v str)) -> Self {
-        NameViewCow::from((Some(prefix), Cow::Borrowed(suffix)))
+        NameBuf::from((Some(prefix), Cow::Borrowed(suffix)))
     }
 }
 
-impl<'v> From<&'v str> for NameViewCow<'v> {
-    fn from(name: &'v str) -> Self {
-        NameViewCow::from((None, Cow::Borrowed(name)))
-    }
-}
-
-impl<'v> From<String> for NameViewCow<'v> {
-    fn from(name: String) -> Self {
-        NameViewCow::from((None, Cow::Owned(name)))
-    }
-}
-
-impl std::fmt::Debug for NameViewCow<'_> {
+impl std::fmt::Debug for NameBuf<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"")?;
 
@@ -474,7 +810,7 @@ impl std::fmt::Debug for NameViewCow<'_> {
     }
 }
 
-impl std::fmt::Display for NameViewCow<'_> {
+impl std::fmt::Display for NameBuf<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (left, right) = self.split();
         if !left.is_empty() { left.fmt(f)?; }
@@ -487,58 +823,58 @@ impl std::fmt::Display for NameViewCow<'_> {
     }
 }
 
-impl PartialEq for NameViewCow<'_> {
+impl PartialEq for NameBuf<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.keys().eq(other.keys())
     }
 }
 
-impl<N: AsRef<Name> + ?Sized> PartialEq<N> for NameViewCow<'_> {
+impl<N: AsRef<Name> + ?Sized> PartialEq<N> for NameBuf<'_> {
     fn eq(&self, other: &N) -> bool {
         self.keys().eq(other.as_ref().keys())
     }
 }
 
-impl PartialEq<Name> for NameViewCow<'_> {
+impl PartialEq<Name> for NameBuf<'_> {
     fn eq(&self, other: &Name) -> bool {
         self.keys().eq(other.keys())
     }
 }
 
-impl PartialEq<NameViewCow<'_>> for Name {
-    fn eq(&self, other: &NameViewCow<'_>) -> bool {
+impl PartialEq<NameBuf<'_>> for Name {
+    fn eq(&self, other: &NameBuf<'_>) -> bool {
         self.keys().eq(other.keys())
     }
 }
 
-impl PartialEq<NameViewCow<'_>> for str {
-    fn eq(&self, other: &NameViewCow<'_>) -> bool {
+impl PartialEq<NameBuf<'_>> for str {
+    fn eq(&self, other: &NameBuf<'_>) -> bool {
         Name::new(self) == other
     }
 }
 
-impl PartialEq<NameViewCow<'_>> for &str {
-    fn eq(&self, other: &NameViewCow<'_>) -> bool {
+impl PartialEq<NameBuf<'_>> for &str {
+    fn eq(&self, other: &NameBuf<'_>) -> bool {
         Name::new(self) == other
     }
 }
 
-impl Eq for NameViewCow<'_> { }
+impl Eq for NameBuf<'_> { }
 
-impl std::hash::Hash for NameViewCow<'_> {
+impl std::hash::Hash for NameBuf<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.keys().for_each(|k| k.0.hash(state))
     }
 }
 
-impl indexmap::Equivalent<Name> for NameViewCow<'_> {
+impl indexmap::Equivalent<Name> for NameBuf<'_> {
     fn equivalent(&self, key: &Name) -> bool {
         self.keys().eq(key.keys())
     }
 }
 
-impl indexmap::Equivalent<NameViewCow<'_>> for Name {
-    fn equivalent(&self, key: &NameViewCow<'_>) -> bool {
+impl indexmap::Equivalent<NameBuf<'_>> for Name {
+    fn equivalent(&self, key: &NameBuf<'_>) -> bool {
         self.keys().eq(key.keys())
     }
 }

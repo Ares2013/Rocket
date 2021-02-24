@@ -1,76 +1,75 @@
-/// # Field Wire Format
-///
-/// Rocket's field wire format is a flexible, non-self-descriptive, text-based
-/// encoding of arbitrarily nested structure keys and their corresponding
-/// values. The general grammar is:
-///
-/// ```ebnf
-/// field := key* '=' value?
-///
-/// key := index                       # the "named" variant
-///      | '.' index                   # the "dot" variant
-///      | '[' index? ']'              # the "bracket" variant
-///      | '[' index (':' index)* ']'  # the "kind" variant
-///
-/// index := ASCII_STRING except ':'
-///
-/// value := UTF8_STRING
-/// ```
-///
-/// Each field consists of any number of `key`s and at most one `value`.
-///
-/// A `key` consists of zero or more indices. Through its indices, each key
-/// identifies a unique child of a structure. As such, when processed
-/// left-to-right, the keys of a field jointly identify a unique leaf of a
-/// structure. The value of the leaf is set to `value`.
-///
-/// The meaning of an `index` is type-dependent, hence the format is
-/// non-self-descriptive. _All_ structures can be described by this format. The
-/// delimiters `.`, `[`, `:`, and `]` have no semantic meaning.
-///
-/// Some examples of valid fields are:
-///
-///   * `=`
-///   * `key=value`
-///   * `key[]=value`
-///   * `.0=value`
-///   * `[0]=value`
-///   * `people[].name=Bob`
-///   * `bob.cousin.names[]=Bob`
-///   * `map[k:1]=Bob`
-///   * `people[bob]nickname=Stan`
-///
-/// # Push Parsing
-///
-/// A type may implement `FromForm`, a 3-stage push-based interface to form
-/// parsing. The three stages are:
-///
-///   1. **Initialization.** The type sets up a context for later `push`es.
-///
-///      ```rust,ignore
-///      fn init(opts: FormOptions) -> Self::Context;
-///      ```
-///
-///   2. **Push.** The structure is repeatedly pushed `field`s; the latest
-///      context is provided with each `push`. If the structure contains
-///      children, it uses the first `key` to identify a child to which it then
-///      `push`es the remaining `field` to. Otherwise, the structure parses the
-///      `value`. The context is updated as needed.
-///
-///      ```rust,ignore
-///      fn push(this: &mut Self::Context, field: FormField<'v>);
-///      ```
-///
-///   3. **Finalization.** The structure is informed that there are no further
-///      fields. It systemizes the effects of previous `push`es via its context to
-///      return a parsed structure or generate an error.
-///
-///      ```rust,ignore
-///      fn finalize(this: Self::Context) -> Result<Self, Self::Error>;
-///      ```
-///
-/// These three stages make up the entirety of the `FromForm` trait.
-///
+//! Parsing and validation of HTTP forms and fields.
+//!
+//! # Field Wire Format
+//!
+//! Rocket's field wire format is a flexible, non-self-descriptive, text-based
+//! encoding of arbitrarily nested structure keys and their corresponding
+//! values. The general grammar is:
+//!
+//! ```ebnf
+//! field := name ('=' value)?
+//!
+//! name := key*
+//!
+//! key := indices
+//!       | '[' indices ']'
+//!       | '.' indices
+//!
+//! indices := index (':' index)*
+//!
+//! index := STRING except ':'
+//!
+//! value := STRING
+//! ```
+//!
+//! Each field name consists of any number of `key`s and at most one `value`.
+//! Keys are delimited by `[]` or `.`. A `key` consists of indices delimited by
+//! `:`.
+//!
+//! The meaning of a key or index is type-dependent, hence the format is
+//! non-self-descriptive. _Any_ structure can be described by this format. The
+//! delimiters `.`, `[`, `:`, and `]` have no semantic meaning.
+//!
+//! Some examples of valid fields are:
+//!
+//!   * `=`
+//!   * `key=value`
+//!   * `key[]=value`
+//!   * `.0=value`
+//!   * `[0]=value`
+//!   * `people[].name=Bob`
+//!   * `bob.cousin.names[]=Bob`
+//!   * `map[k:1]=Bob`
+//!   * `people[bob]nickname=Stan`
+//!
+//! # Parsing
+//!
+//! The [`FromForm`] trait describes a push-based parser for this wire format.
+//! Fields are preprocessed into either [`ValueField`]s or [`DataField`]s which
+//! are then pushed to the parser in [`FromForm::push_value()`] or
+//! [`FromForm::push_data()`], respectively. Both url-encoded forms and
+//! multipart forms are supported. All url-encoded form fields are preprocessed
+//! as [`ValueField`]s. Multipart form fields with Content-Types are processed
+//! as [`DataField`]s while those without a set Content-Type are processed as
+//! [`ValueField`]s.
+//!
+//! # Data Limits
+//!
+//! The total amount of data accepted by the [`Form`] data guard is limited by
+//! the following limits:
+//!
+//! | Limit Name  | Default | Description                        |
+//! |-------------|---------|------------------------------------|
+//! | `form`      | 32KiB   | total limit for url-encoded forms  |
+//! | `data-form` | 2MiB    | total limit for multipart forms    |
+//! | `*`         | N/A     | each field type has its own limits |
+//!
+//! Additionally, as noted above, each form field type (a form guard) typically
+//! imposes its own limits. For example, the `&str` form guard imposes a data
+//! limit of `string` when multipart data is streamed.
+//!
+//! See the [`Limits`](crate::data::Limits) docs for more.
+//!
 /// # Examples
 ///
 /// The following examples use `f1=v1&f2=v2` to illustrate field/value pairs
@@ -457,7 +456,7 @@ pub type Result<'v, T> = std::result::Result<T, Errors<'v>>;
 pub use rocket_codegen::{FromForm, FromFormField};
 
 #[doc(inline)]
-pub use self::error::Errors;
+pub use self::error::{Errors, Error};
 
 pub use field::*;
 pub use options::*;

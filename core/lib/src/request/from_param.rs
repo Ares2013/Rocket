@@ -81,17 +81,12 @@ use crate::http::uri::{Segments, PathError};
 ///     type returns successfully. Otherwise, the raw path segment is returned
 ///     in the `Err` value.
 ///
-///   * **String**
+///   * **&str, String**
 ///
-///     Percent decodes the path segment. If the decode is successful, the
-///     decoded string is returned. Otherwise, an `Err` with the original path
-///     segment is returned.
+///     _This implementation always returns successfully._
 ///
-///   * **Cow<str>**
-///
-///     Percent decodes the path segment, allocating only when necessary. If the
-///     decode is successful, the decoded string is returned. Otherwise, an
-///     `Err` with the original path segment is returned.
+///     Returns the percent-decoded path segment with invalid UTF-8 byte
+///     sequences replaced by � U+FFFD.
 ///
 ///   * **Option&lt;T>** _where_ **T: FromParam**
 ///
@@ -120,7 +115,6 @@ use crate::http::uri::{Segments, PathError};
 /// `key` and the number after the colon is stored in `value`:
 ///
 /// ```rust
-/// # #[allow(dead_code)]
 /// struct MyParam<'r> {
 ///     key: &'r str,
 ///     value: usize
@@ -204,7 +198,7 @@ impl<'a> FromParam<'a> for String {
 
     #[inline(always)]
     fn from_param(param: &'a str) -> Result<String, Self::Error> {
-        warn_!("this is deprecated");
+        // TODO: Tell the user they're being inefficient?
         Ok(param.to_string())
     }
 }

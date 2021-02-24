@@ -86,7 +86,7 @@ impl FieldExt for Field<'_> {
 
     fn name_view(&self) -> Result<syn::Expr> {
         let field_name = self.field_name()?;
-        Ok(syn::parse_quote!(#_form::NameViewCow::from((__c.__parent, #field_name))))
+        Ok(syn::parse_quote!(#_form::NameBuf::from((__c.__parent, #field_name))))
     }
 }
 

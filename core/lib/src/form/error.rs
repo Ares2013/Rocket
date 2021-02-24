@@ -7,8 +7,10 @@ use std::borrow::Cow;
 use serde::{Serialize, ser::{Serializer, SerializeStruct}};
 
 use crate::http::Status;
-use crate::form::name::{NameViewCow, Name};
+use crate::form::name::{NameBuf, Name};
+use crate::data::ByteUnit;
 
+/// A collection of [`Error`]s.
 #[derive(Default, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Errors<'v>(Vec<Error<'v>>);
@@ -21,10 +23,23 @@ impl crate::http::ext::IntoOwned for Errors<'_> {
     }
 }
 
+/// A form error, potentially tied to a specific form field.
+///
+/// # Serialization
+///
+/// When a value of this type is serialized, a `struct` or map with the
+/// following fields is emitted:
+///
+/// | field    | type           | description                                      |
+/// |----------|----------------|--------------------------------------------------|
+/// | `name`   | `Option<&str>` | the erroring field's name, if known              |
+/// | `value`  | `Option<&str>` | the erroring field's value, if known             |
+/// | `entity` | `&str`         | string representation of the erroring [`Entity`] |
+/// | `msg`    | `&str`         | concise message of the error                     |
 #[derive(Debug, PartialEq)]
 pub struct Error<'v> {
     /// The name of the field, if it is known.
-    pub name: Option<NameViewCow<'v>>,
+    pub name: Option<NameBuf<'v>>,
     /// The field's value, if it is known.
     pub value: Option<Cow<'v, str>>,
     /// The kind of error that occured.
@@ -135,12 +150,12 @@ impl<'v> Errors<'v> {
         Errors(vec![])
     }
 
-    pub fn with_name<N: Into<NameViewCow<'v>>>(mut self, name: N) -> Self {
+    pub fn with_name<N: Into<NameBuf<'v>>>(mut self, name: N) -> Self {
         self.set_name(name);
         self
     }
 
-    pub fn set_name<N: Into<NameViewCow<'v>>>(&mut self, name: N) {
+    pub fn set_name<N: Into<NameBuf<'v>>>(&mut self, name: N) {
         let name = name.into();
         for error in self.iter_mut() {
             if error.name.is_none() {
@@ -190,12 +205,12 @@ impl<'v> Error<'v> {
         self.entity = entity;
     }
 
-    pub fn with_name<N: Into<NameViewCow<'v>>>(mut self, name: N) -> Self {
+    pub fn with_name<N: Into<NameBuf<'v>>>(mut self, name: N) -> Self {
         self.set_name(name);
         self
     }
 
-    pub fn set_name<N: Into<NameViewCow<'v>>>(&mut self, name: N) {
+    pub fn set_name<N: Into<NameBuf<'v>>>(&mut self, name: N) {
         if self.name.is_none() {
             self.name = Some(name.into());
         }
@@ -468,6 +483,15 @@ impl<'a, 'v: 'a> From<Vec<Cow<'v, str>>> for ErrorKind<'a> {
 impl From<(Option<isize>, Option<isize>)> for ErrorKind<'_> {
     fn from((start, end): (Option<isize>, Option<isize>)) -> Self {
         ErrorKind::OutOfRange { start, end }
+    }
+}
+
+impl From<(Option<ByteUnit>, Option<ByteUnit>)> for ErrorKind<'_> {
+    fn from((start, end): (Option<ByteUnit>, Option<ByteUnit>)) -> Self {
+        use std::convert::TryFrom;
+
+        let as_isize = |b: ByteUnit| isize::try_from(b.as_u64()).ok();
+        ErrorKind::from((start.and_then(as_isize), end.and_then(as_isize)))
     }
 }
 
