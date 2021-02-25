@@ -20,8 +20,10 @@ const ID_LENGTH: usize = 3;
 async fn upload(paste: Data, host: State<'_, Absolute<'_>>) -> io::Result<String> {
     let id = PasteId::new(ID_LENGTH);
     paste.open(128.kibibytes()).into_file(id.file_path()).await?;
-    Ok(host.inner().clone().with_origin(uri!(retrieve: id)).to_string())
+
     // TODO: Ok(uri!(HOST, retrieve: id))
+    let host = host.inner().clone();
+    Ok(host.with_origin(uri!(retrieve: id)).to_string())
 }
 
 #[get("/<id>")]

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use yansi::Paint;
 
 use crate::config::{SecretKey, TlsConfig, LogLevel};
+use crate::request::{self, Request, FromRequest};
 use crate::data::Limits;
 
 /// Rocket server configuration.
@@ -351,6 +352,15 @@ impl Provider for Config {
 
     fn profile(&self) -> Option<Profile> {
         Some(Profile::from_env_or("ROCKET_PROFILE", Self::DEFAULT_PROFILE))
+    }
+}
+
+#[crate::async_trait]
+impl<'a, 'r> FromRequest<'a, 'r> for &'r Config {
+    type Error = std::convert::Infallible;
+
+    async fn from_request(req: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
+        request::Outcome::Success(req.config())
     }
 }
 
