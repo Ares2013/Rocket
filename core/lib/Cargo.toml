@@ -45,7 +45,8 @@ indexmap = { version = "1.0", features = ["serde"] }
 tempfile = "3"
 
 [dependencies.state]
-path = "../../../state-rs/"
+git = "https://github.com/SergioBenitez/state.git"
+rev = "7576652"
 
 [dependencies.async-trait]
 git = "https://github.com/SergioBenitez/async-trait.git"
@@ -61,10 +62,8 @@ path = "../http"
 features = ["serde"]
 
 [dependencies.multer]
-# git = "https://github.com/rousan/multer-rs.git"
-# rev = "dad3b58"
-# features = ["tokio-io"]
-path = "../../../multer-rs/"
+git = "https://github.com/rousan/multer-rs.git"
+rev = "0620e54"
 features = ["tokio-io"]
 
 [dependencies.tokio]

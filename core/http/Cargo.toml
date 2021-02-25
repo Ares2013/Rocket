@@ -33,20 +33,17 @@ tokio = { version = "1.0", features = ["net", "sync", "time"] }
 unicode-xid = "0.2"
 log = "0.4"
 ref-cast = "1.0"
-uncased = { path = "../../../uncased/" }
+uncased = "0.9.4"
 parking_lot = "0.11"
 either = "1"
+pear = "0.2.1"
 pin-project-lite = "0.2"
 memchr = "2"
-
-[dependencies.pear]
-path = "../../../Pear/lib"
+stable-pattern = "0.1"
 
 [dependencies.state]
-path = "../../../state-rs/"
-
-[dependencies.pattern]
-path = "../../../../stable-pattern/"
+git = "https://github.com/SergioBenitez/state.git"
+rev = "7576652"
 
 [dependencies._serde]
 package = "serde"

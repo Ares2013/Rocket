@@ -100,14 +100,19 @@ impl<'r> Iterator for RawStrParser<'r> {
     fn next(&mut self) -> Option<Self::Item> {
         use std::borrow::Cow::*;
 
-        if self.source.is_empty() {
-            return None;
-        }
+        let (name, value) = loop {
+            if self.source.is_empty() {
+                return None;
+            }
 
-        let (field_str, rest) = self.source.split_at_byte(b'&');
-        self.source = rest;
+            let (field_str, rest) = self.source.split_at_byte(b'&');
+            self.source = rest;
 
-        let (name, value) = field_str.split_at_byte(b'=');
+            if !field_str.is_empty() {
+                break field_str.split_at_byte(b'=');
+            }
+        };
+
         let name_val = match (name.url_decode_lossy(), value.url_decode_lossy()) {
             (Borrowed(name), Borrowed(val)) => (name, val),
             (Borrowed(name), Owned(v)) => (name, self.buffer.push_one(v)),
@@ -120,6 +125,25 @@ impl<'r> Iterator for RawStrParser<'r> {
         };
 
         Some(ValueField::from(name_val))
+    }
+}
+
+#[cfg(test)]
+mod raw_str_parse_tests {
+    use crate::form::ValueField as Field;
+
+    #[test]
+    fn test_skips_empty() {
+        let buffer = super::Buffer::new();
+        let fields: Vec<_> = super::RawStrParser::new(&buffer, "a&b=c&&&c".into()).collect();
+        assert_eq!(fields, &[Field::parse("a"), Field::parse("b=c"), Field::parse("c")]);
+    }
+
+    #[test]
+    fn test_decodes() {
+        let buffer = super::Buffer::new();
+        let fields: Vec<_> = super::RawStrParser::new(&buffer, "a+b=c%20d&%26".into()).collect();
+        assert_eq!(fields, &[Field::parse("a b=c d"), Field::parse("&")]);
     }
 }
 

@@ -5,7 +5,7 @@ use std::str::Utf8Error;
 use std::fmt;
 
 use ref_cast::RefCast;
-use pattern::{Pattern, ReverseSearcher, Split, SplitInternal};
+use stable_pattern::{Pattern, ReverseSearcher, Split, SplitInternal};
 
 use crate::uncased::UncasedStr;
 
