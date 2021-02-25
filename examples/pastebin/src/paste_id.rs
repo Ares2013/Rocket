@@ -27,7 +27,8 @@ impl PasteId<'_> {
     }
 
     pub fn file_path(&self) -> PathBuf {
-        Path::new("upload").join(self.0.as_ref())
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/", "upload");
+        Path::new(root).join(self.0.as_ref())
     }
 }
 
