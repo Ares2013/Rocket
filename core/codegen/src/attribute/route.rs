@@ -194,7 +194,7 @@ fn data_expr(ident: &syn::Ident, ty: &syn::Type) -> TokenStream {
 }
 
 fn query_exprs(route: &Route) -> Option<TokenStream> {
-    use devise::ext::Split6;
+    use devise::ext::{Split2, Split6};
 
     define_spanned_export!(Span::call_site() =>
         __req, __data, _log, _form, Outcome, _Ok, _Err, _Some, _None
@@ -202,8 +202,19 @@ fn query_exprs(route: &Route) -> Option<TokenStream> {
 
     let query_segments = route.attribute.path.query.as_ref()?;
 
-    // NOTE: We only care about dynamic parameters since the router will only
-    // send us request where the static parameters match.
+    // Record all of the static parameters for later filtering.
+    let (raw_name, raw_value) = query_segments.iter()
+        .filter(|s| !s.is_dynamic())
+        .map(|s| {
+            let name = s.name.name();
+            match name.find('=') {
+                Some(i) => (&name[..i], &name[i + 1..]),
+                None => (name, "")
+            }
+        })
+        .split2();
+
+    // Now record all of the dynamic parameters.
     let (name, matcher, ident, init_expr, push_expr, finalize_expr) = query_segments.iter()
         .filter(|s| s.is_dynamic())
         .map(|s| (s, s.name.name(), route.find_input(&s.name).expect("dynamic has input")))
@@ -235,9 +246,12 @@ fn query_exprs(route: &Route) -> Option<TokenStream> {
         #(let mut #ident = #init_expr;)*
 
         for _f in #__req.query_fields() {
-            match _f.name.key_lossy().as_str() {
-                // FIXME: Need to skip raw so we don't push into trailing.
-                #(#matcher => #push_expr,)*
+            let _raw = (_f.name.source().as_str(), _f.value);
+            let _key = _f.name.key_lossy().as_str();
+            match (_raw, _key) {
+                // Skip static parameters so <param..> doesn't see them.
+                #(((#raw_name, #raw_value), _) => { /* skip */ },)*
+                #((_, #matcher) => #push_expr,)*
                 _ => { /* in case we have no trailing, ignore all else */ },
             }
         }

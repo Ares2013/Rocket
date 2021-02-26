@@ -9,26 +9,26 @@ use rocket::form::Form;
 // Test that the data parameters works as expected.
 
 #[derive(FromForm)]
-struct Inner {
-    field: String
+struct Inner<'r> {
+    field: &'r str
 }
 
-struct Simple(String);
+struct Simple<'r>(&'r str);
 
 #[async_trait]
-impl<'r> FromData<'r> for Simple {
+impl<'r> FromData<'r> for Simple<'r> {
     type Error = std::io::Error;
 
     async fn from_data(req: &'r Request<'_>, data: Data) -> data::Outcome<Self, Self::Error> {
-        String::from_data(req, data).await.map(Simple)
+        <&'r str>::from_data(req, data).await.map(Simple)
     }
 }
 
 #[post("/f", data = "<form>")]
-fn form(form: Form<Inner>) -> String { form.into_inner().field }
+fn form<'r>(form: Form<Inner<'r>>) -> &'r str { form.into_inner().field }
 
 #[post("/s", data = "<simple>")]
-fn simple(simple: Simple) -> String { simple.0 }
+fn simple<'r>(simple: Simple<'r>) -> &'r str { simple.0 }
 
 #[test]
 fn test_data() {

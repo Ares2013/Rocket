@@ -34,11 +34,13 @@ pub use rmp_serde::decode::Error;
 ///
 /// ## Receiving MessagePack
 ///
-/// If you're receiving MessagePack data, simply add a `data` parameter to your
-/// route arguments and ensure the type of the parameter is a `MsgPack<T>`,
-/// where `T` is some type you'd like to parse from MessagePack. `T` must
-/// implement [`Deserialize`] from [`serde`]. The data is parsed from the HTTP
-/// request body.
+/// `MsgPack` is both a data guard and a form guard.
+///
+/// ### Data Guard
+///
+/// To parse request body data as MessagePack , add a `data` route argument with
+/// a target type of `MsgPack<T>`, where `T` is some type you'd like to parse
+/// from JSON. `T` must implement [`serde::Deserialize`].
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
@@ -56,6 +58,30 @@ pub use rmp_serde::decode::Error;
 /// Using `format = msgpack` means that any request that doesn't specify
 /// "application/msgpack" as its first `Content-Type:` header parameter will not
 /// be routed to this handler.
+///
+/// ### Form Guard
+///
+/// `MsgPack<T>`, as a form guard, accepts value and data fields and parses the
+/// data as a `T`. Simple use `MsgPack<T>`:
+///
+/// ```rust
+/// # #[macro_use] extern crate rocket;
+/// # extern crate rocket_contrib;
+/// # type Metadata = usize;
+/// use rocket::form::{Form, FromForm};
+/// use rocket_contrib::msgpack::MsgPack;
+///
+/// #[derive(FromForm)]
+/// struct User<'r> {
+///     name: &'r str,
+///     metadata: MsgPack<Metadata>
+/// }
+///
+/// #[post("/users", data = "<form>")]
+/// fn new_user(form: Form<User<'_>>) {
+///     /* ... */
+/// }
+/// ```
 ///
 /// ## Sending MessagePack
 ///

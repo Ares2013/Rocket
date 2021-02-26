@@ -48,7 +48,7 @@ pub enum PathError {
 }
 
 impl<'o> Segments<'o> {
-    /// Number of path segments left.
+    /// Returns the number of path segments left.
     #[inline]
     pub fn len(&self) -> usize {
         let max_pos = std::cmp::min(self.pos, self.segments.len());
@@ -61,14 +61,14 @@ impl<'o> Segments<'o> {
         self.len() == 0
     }
 
-    /// Skip `n` segments.
+    /// Skips `n` segments.
     #[inline]
     pub fn skip(mut self, n: usize) -> Self {
         self.pos = std::cmp::min(self.pos + n, self.segments.len());
         self
     }
 
-    /// Get the `n`th segment (from the current position).
+    /// Get the `n`th segment from the current position.
     #[inline]
     pub fn get(&self, n: usize) -> Option<&'o str> {
         self.segments.get(self.pos + n)
@@ -151,7 +151,7 @@ pub struct QuerySegments<'o> {
 }
 
 impl<'o> QuerySegments<'o> {
-    /// Number of query segments left.
+    /// Returns the number of query segments left.
     pub fn len(&self) -> usize {
         let max_pos = std::cmp::min(self.pos, self.segments.len());
         self.segments.len() - max_pos
@@ -163,7 +163,7 @@ impl<'o> QuerySegments<'o> {
         self
     }
 
-    /// Get the `n`th segment (from the current position).
+    /// Get the `n`th segment from the current position.
     #[inline]
     pub fn get(&self, n: usize) -> Option<(&'o str, &'o str)> {
         let (name, val) = self.segments.get(self.pos + n)?;

@@ -270,14 +270,6 @@ impl<'r, 'o: 'r, R: ?Sized + ToOwned> Responder<'r, 'o> for std::borrow::Cow<'o,
     }
 }
 
-/// Prints a warning with the error and forwards to the `500` error catcher.
-impl<'r> Responder<'r, 'static> for std::io::Error {
-    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
-        warn_!("I/O Error: {:?}", yansi::Paint::default(self));
-        Err(Status::InternalServerError)
-    }
-}
-
 /// If `self` is `Some`, responds with the wrapped `Responder`. Otherwise prints
 /// a warning message and returns an `Err` of `Status::NotFound`.
 impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for Option<R> {

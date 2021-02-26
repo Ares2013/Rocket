@@ -77,10 +77,11 @@ use crate::http::uncased::AsUncased;
 ///   * **`Vec<T>` where `T: FromForm`**
 ///
 ///     Parses a sequence of `T`'s. A new `T` is created whenever the field
-///     name's key changes; the previous `T` is finalized and errors are stored.
-///     While the key remains the same, form values are pushed to the current
-///     `T` after being shifted. All collected errors are returned at
-///     finalization, if any, or the successfully created vector is returned.
+///     name's key changes or is empty; the previous `T` is finalized and errors
+///     are stored. While the key remains the same and non-empty, form values
+///     are pushed to the current `T` after being shifted. All collected errors
+///     are returned at finalization, if any, or the successfully created vector
+///     is returned.
 ///
 ///   * **`HashMap<K, V>` where `K: FromForm + Eq + Hash`, `V: FromForm`**
 ///

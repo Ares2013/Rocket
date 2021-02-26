@@ -260,7 +260,6 @@ impl<'a, 'r> FromRequest<'a, 'r> for FlashMessage<'a> {
     }
 }
 
-
 impl<R> Serialize for Flash<R> {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
         let mut flash = ser.serialize_struct("Flash", 2)?;

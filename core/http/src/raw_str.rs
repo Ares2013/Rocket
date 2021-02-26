@@ -55,96 +55,6 @@ use crate::uncased::UncasedStr;
 #[derive(RefCast, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawStr(str);
 
-// // #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-// pub struct RawStrBuf {
-//     decoded: DecodeKind,
-//     buf: String,
-// }
-//
-// impl RawStrBuf {
-//     fn as_raw_str(&self) -> &RawStr {
-//         RawStr::new(&self.buf)
-//     }
-//
-//     fn percent_decode_in_place(&mut self) -> Result<&str, Utf8Error> {
-//         if let DecodeKind::Percent(res) = self.decoded {
-//             return res.map(move |_| self.buf.as_str());
-//         }
-//
-//         let result = match self.as_raw_str().percent_decode() {
-//             Ok(Cow::Owned(new)) => Ok(self.buf = new),
-//             Ok(Cow::Borrowed(_)) => Ok(()),
-//             Err(e) => Err(e)
-//         };
-//
-//         self.decoded = DecodeKind::Percent(result);
-//         result.map(move |_| self.buf.as_str())
-//     }
-//
-//     fn url_decode_in_place(&mut self) -> Result<&str, Utf8Error> {
-//         if let DecodeKind::Url(res) = self.decoded {
-//             return res.map(move |_| self.buf.as_str());
-//         }
-//
-//         let result = match self.as_raw_str().url_decode() {
-//             Ok(Cow::Owned(new)) => Ok(self.buf = new),
-//             Ok(Cow::Borrowed(_)) => Ok(()),
-//             Err(e) => Err(e)
-//         };
-//
-//         self.decoded = DecodeKind::Url(result);
-//         result.map(move |_| self.buf.as_str())
-//     }
-// }
-//
-// enum DecodeKind {
-//     Raw,
-//     Html(Result<(), Utf8Error>),
-//     Url(Result<(), Utf8Error>),
-//     Percent(Result<(), Utf8Error>),
-// }
-//
-// impl ToOwned for RawStr {
-//     type Owned = RawStrBuf;
-//
-//     fn to_owned(&self) -> Self::Owned {
-//         RawStrBuf {
-//             decoded: DecodeKind::Raw,
-//             buf: self.to_string()
-//         }
-//     }
-// }
-//
-// impl std::borrow::Borrow<RawStr> for RawStrBuf {
-//     fn borrow(&self) -> &RawStr {
-//         self.as_raw_str()
-//     }
-// }
-
-#[cfg(feature = "serde")]
-mod serde {
-    use _serde::{ser, de, Serialize, Deserialize};
-
-    use super::*;
-
-    impl Serialize for RawStr {
-        fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
-            where S: ser::Serializer
-        {
-            self.as_str().serialize(ser)
-        }
-    }
-
-    impl<'de: 'a, 'a> Deserialize<'de> for &'a RawStr {
-        fn deserialize<D>(de: D) -> Result<Self, D::Error>
-            where D: de::Deserializer<'de>
-        {
-            <&'a str as Deserialize<'de>>::deserialize(de).map(RawStr::new)
-        }
-    }
-
-}
-
 impl RawStr {
     /// Constructs an `&RawStr` from a string-like type at no cost.
     ///
@@ -360,7 +270,7 @@ impl RawStr {
     /// let escaped = raw_str.html_escape();
     /// assert_eq!(escaped, "大阪");
     /// ```
-    // NOTE: This is the ~fastest (a table-based implementation is slihtly
+    // NOTE: This is the ~fastest (a table-based implementation is slightly
     // faster) implementation benchmarked for dense-ish escaping. For sparser
     // texts, a regex-based-find solution is much faster.
     pub fn html_escape(&self) -> Cow<'_, str> {
@@ -432,12 +342,35 @@ impl RawStr {
     ///
     /// This length is in bytes, not [`char`]s or graphemes. In other words,
     /// it may not be what a human considers the length of the string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let raw_str = RawStr::new("Hello, world!");
+    /// assert_eq!(raw_str.len(), 13);
+    /// ```
     #[inline]
     pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Returns `true` if `self` has a length of zero bytes.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let raw_str = RawStr::new("Hello, world!");
+    /// assert!(!raw_str.is_empty());
+    ///
+    /// let raw_str = RawStr::new("");
+    /// assert!(raw_str.is_empty());
+    /// ```
     #[inline]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
@@ -494,8 +427,11 @@ impl RawStr {
     /// Basic usage:
     ///
     /// ```
-    /// let s = "Hello";
-    /// let ptr = s.as_ptr();
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let raw_str = RawStr::new("hi");
+    /// let ptr = raw_str.as_ptr();
     /// ```
     pub const fn as_ptr(&self) -> *const u8 {
         self.as_str().as_ptr()
@@ -525,18 +461,20 @@ impl RawStr {
     ///
     /// Returns `false` if it does not.
     ///
-    /// The [pattern] can be a `&str`, [`char`], a slice of [`char`]s, or a
+    /// The pattern can be a `&str`, [`char`], a slice of [`char`]s, or a
     /// function or closure that determines if a character matches.
     ///
     /// [`char`]: prim@char
-    /// [pattern]: self::pattern
     ///
     /// # Examples
     ///
     /// Basic usage:
     ///
     /// ```
-    /// let bananas = "bananas";
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let bananas = RawStr::new("bananas");
     ///
     /// assert!(bananas.contains("nana"));
     /// assert!(!bananas.contains("apples"));
@@ -551,18 +489,20 @@ impl RawStr {
     ///
     /// Returns `false` if it does not.
     ///
-    /// The [pattern] can be a `&str`, [`char`], a slice of [`char`]s, or a
+    /// The pattern can be a `&str`, [`char`], a slice of [`char`]s, or a
     /// function or closure that determines if a character matches.
     ///
     /// [`char`]: prim@char
-    /// [pattern]: self::pattern
     ///
     /// # Examples
     ///
     /// Basic usage:
     ///
     /// ```
-    /// let bananas = "bananas";
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let bananas = RawStr::new("bananas");
     ///
     /// assert!(bananas.starts_with("bana"));
     /// assert!(!bananas.starts_with("nana"));
@@ -576,18 +516,20 @@ impl RawStr {
     ///
     /// Returns `false` if it does not.
     ///
-    /// The [pattern] can be a `&str`, [`char`], a slice of [`char`]s, or a
+    /// The pattern can be a `&str`, [`char`], a slice of [`char`]s, or a
     /// function or closure that determines if a character matches.
     ///
     /// [`char`]: prim@char
-    /// [pattern]: self::pattern
     ///
     /// # Examples
     ///
     /// Basic usage:
     ///
     /// ```
-    /// let bananas = "bananas";
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let bananas = RawStr::new("bananas");
     ///
     /// assert!(bananas.ends_with("anas"));
     /// assert!(!bananas.ends_with("nana"));
@@ -601,116 +543,26 @@ impl RawStr {
     /// An iterator over substrings of this string slice, separated by
     /// characters matched by a pattern.
     ///
-    /// The [pattern] can be a `&str`, [`char`], a slice of [`char`]s, or a
+    /// The pattern can be a `&str`, [`char`], a slice of [`char`]s, or a
     /// function or closure that determines if a character matches.
     ///
     /// [`char`]: prim@char
-    /// [pattern]: self::pattern
-    ///
-    /// # Iterator behavior
-    ///
-    /// The returned iterator will be a [`DoubleEndedIterator`] if the pattern
-    /// allows a reverse search and forward/reverse search yields the same
-    /// elements. This is true for, e.g., [`char`], but not for `&str`.
-    ///
-    /// If the pattern allows a reverse search but its results might differ
-    /// from a forward search, the [`rsplit`] method can be used.
-    ///
-    /// [`rsplit`]: str::rsplit
     ///
     /// # Examples
     ///
     /// Simple patterns:
     ///
     /// ```
-    /// let v: Vec<&str> = "Mary had a little lamb".split(' ').collect();
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let v: Vec<_> = RawStr::new("Mary had a little lamb")
+    ///     .split(' ')
+    ///     .map(|r| r.as_str())
+    ///     .collect();
+    ///
     /// assert_eq!(v, ["Mary", "had", "a", "little", "lamb"]);
-    ///
-    /// let v: Vec<&str> = "".split('X').collect();
-    /// assert_eq!(v, [""]);
-    ///
-    /// let v: Vec<&str> = "lionXXtigerXleopard".split('X').collect();
-    /// assert_eq!(v, ["lion", "", "tiger", "leopard"]);
-    ///
-    /// let v: Vec<&str> = "lion::tiger::leopard".split("::").collect();
-    /// assert_eq!(v, ["lion", "tiger", "leopard"]);
-    ///
-    /// let v: Vec<&str> = "abc1def2ghi".split(char::is_numeric).collect();
-    /// assert_eq!(v, ["abc", "def", "ghi"]);
-    ///
-    /// let v: Vec<&str> = "lionXtigerXleopard".split(char::is_uppercase).collect();
-    /// assert_eq!(v, ["lion", "tiger", "leopard"]);
     /// ```
-    ///
-    /// If the pattern is a slice of chars, split on each occurrence of any of the characters:
-    ///
-    /// ```
-    /// let v: Vec<&str> = "2020-11-03 23:59".split(&['-', ' ', ':', '@'][..]).collect();
-    /// assert_eq!(v, ["2020", "11", "03", "23", "59"]);
-    /// ```
-    ///
-    /// A more complex pattern, using a closure:
-    ///
-    /// ```
-    /// let v: Vec<&str> = "abc1defXghi".split(|c| c == '1' || c == 'X').collect();
-    /// assert_eq!(v, ["abc", "def", "ghi"]);
-    /// ```
-    ///
-    /// If a string contains multiple contiguous separators, you will end up
-    /// with empty strings in the output:
-    ///
-    /// ```
-    /// let x = "||||a||b|c".to_string();
-    /// let d: Vec<_> = x.split('|').collect();
-    ///
-    /// assert_eq!(d, &["", "", "", "", "a", "", "b", "c"]);
-    /// ```
-    ///
-    /// Contiguous separators are separated by the empty string.
-    ///
-    /// ```
-    /// let x = "(///)".to_string();
-    /// let d: Vec<_> = x.split('/').collect();
-    ///
-    /// assert_eq!(d, &["(", "", "", ")"]);
-    /// ```
-    ///
-    /// Separators at the start or end of a string are neighbored
-    /// by empty strings.
-    ///
-    /// ```
-    /// let d: Vec<_> = "010".split("0").collect();
-    /// assert_eq!(d, &["", "1", ""]);
-    /// ```
-    ///
-    /// When the empty string is used as a separator, it separates
-    /// every character in the string, along with the beginning
-    /// and end of the string.
-    ///
-    /// ```
-    /// let f: Vec<_> = "rust".split("").collect();
-    /// assert_eq!(f, &["", "r", "u", "s", "t", ""]);
-    /// ```
-    ///
-    /// Contiguous separators can lead to possibly surprising behavior
-    /// when whitespace is used as the separator. This code is correct:
-    ///
-    /// ```
-    /// let x = "    a  b c".to_string();
-    /// let d: Vec<_> = x.split(' ').collect();
-    ///
-    /// assert_eq!(d, &["", "", "", "", "a", "", "b", "c"]);
-    /// ```
-    ///
-    /// It does _not_ give you:
-    ///
-    /// ```,ignore
-    /// assert_eq!(d, &["a", "b", "c"]);
-    /// ```
-    ///
-    /// Use [`split_whitespace`] for this behavior.
-    ///
-    /// [`split_whitespace`]: str::split_whitespace
     #[inline]
     pub fn split<'a, P>(&'a self, pat: P) -> impl Iterator<Item = &'a RawStr>
         where P: Pattern<'a>
@@ -807,30 +659,41 @@ impl RawStr {
     /// Basic usage
     ///
     /// ```
-    /// let four: u32 = "4".parse().unwrap();
+    /// # extern crate rocket;
+    /// use rocket::http::RawStr;
+    ///
+    /// let four: u32 = RawStr::new("4").parse().unwrap();
     ///
     /// assert_eq!(4, four);
-    /// ```
-    ///
-    /// Using the 'turbofish' instead of annotating `four`:
-    ///
-    /// ```
-    /// let four = "4".parse::<u32>();
-    ///
-    /// assert_eq!(Ok(4), four);
-    /// ```
-    ///
-    /// Failing to parse:
-    ///
-    /// ```
-    /// let nope = "j".parse::<u32>();
-    ///
-    /// assert!(nope.is_err());
     /// ```
     #[inline]
     pub fn parse<F: std::str::FromStr>(&self) -> Result<F, F::Err> {
         std::str::FromStr::from_str(self.as_str())
     }
+}
+
+#[cfg(feature = "serde")]
+mod serde {
+    use _serde::{ser, de, Serialize, Deserialize};
+
+    use super::*;
+
+    impl Serialize for RawStr {
+        fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
+            where S: ser::Serializer
+        {
+            self.as_str().serialize(ser)
+        }
+    }
+
+    impl<'de: 'a, 'a> Deserialize<'de> for &'a RawStr {
+        fn deserialize<D>(de: D) -> Result<Self, D::Error>
+            where D: de::Deserializer<'de>
+        {
+            <&'a str as Deserialize<'de>>::deserialize(de).map(RawStr::new)
+        }
+    }
+
 }
 
 impl fmt::Debug for RawStr {

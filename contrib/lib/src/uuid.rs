@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::ops::Deref;
 
 use rocket::request::FromParam;
-use rocket::form::{self, FromFormField, Errors, ValueField};
+use rocket::form::{self, FromFormField, ValueField};
 
 type ParseError = <self::uuid_crate::Uuid as FromStr>::Err;
 
@@ -110,7 +110,7 @@ impl<'a> FromParam<'a> for Uuid {
 }
 
 impl<'v> FromFormField<'v> for Uuid {
-    fn from_value(field: ValueField<'v>) -> Result<Self, Errors<'v>> {
+    fn from_value(field: ValueField<'v>) -> form::Result<'v, Self> {
         Ok(field.value.parse().map_err(form::error::Error::custom)?)
     }
 }

@@ -421,6 +421,33 @@ impl std::fmt::Display for Key {
 /// assert_eq!(view.as_name(), "a.b[c:d]");
 /// assert_eq!(view.parent().unwrap(), "a.b[c:d]");
 /// ```
+///
+/// # Equality
+///
+/// `PartialEq`, `Eq`, and `Hash` all operate on the name prefix including the
+/// current key. Only key values are compared; delimiters are insignificant.
+/// Again, illustrated via examples:
+///
+/// ```rust
+/// use rocket::form::name::NameView;
+///
+/// let mut view = NameView::new("a.b[c:d]");
+/// assert_eq!(view, "a");
+///
+/// // Shifted once to the right views the second key: `a.(b)[c:d]`.
+/// view.shift();
+/// assert_eq!(view.key().unwrap(), "b");
+/// assert_eq!(view.as_name(), "a.b");
+/// assert_eq!(view, "a.b");
+/// assert_eq!(view, "a[b]");
+///
+/// // Shifting again now has predictable results: `a.b[(c:d)]`.
+/// view.shift();
+/// assert_eq!(view, "a.b[c:d]");
+/// assert_eq!(view, "a.b.c:d");
+/// assert_eq!(view, "a[b].c:d");
+/// assert_eq!(view, "a[b]c:d");
+/// ```
 #[derive(Copy, Clone)]
 pub struct NameView<'v> {
     name: &'v Name,

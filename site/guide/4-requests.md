@@ -112,26 +112,6 @@ fn hello(name: String, age: u8, cool: bool) -> String {
 [`FromParam`]: @api/rocket/request/trait.FromParam.html
 [`FromParam` API docs]: @api/rocket/request/trait.FromParam.html
 
-<!-- ! note: Rocket types _raw_ strings separately from decoded strings. -->
-<!--  -->
-<!--   You may have noticed an unfamiliar [`RawStr`] type in the code example above. -->
-<!--   This is a special type, provided by Rocket, that represents an unsanitized, -->
-<!--   unvalidated, and undecoded raw string from an HTTP message. It exists to -->
-<!--   separate validated string inputs, represented by types such as `String`, -->
-<!--   `&str`, and `Cow<str>`, from unvalidated inputs, represented by `&RawStr`. It -->
-<!--   also provides helpful methods to convert the unvalidated string into a -->
-<!--   validated one. -->
-<!--  -->
-<!--   Because `&RawStr` implements [`FromParam`], it can be used as the type of a -->
-<!--   dynamic segment, as in the example above, where the value refers to a -->
-<!--   potentially undecoded string. By contrast, a `String` is guaranteed to be -->
-<!--   decoded. Which you should use depends on whether you want direct but -->
-<!--   potentially unsafe access to the string (`&RawStr`), or safe access to the -->
-<!--   string at the cost of an allocation (`String`). -->
-<!--  -->
-<!--   [`RawStr`]: @api/rocket/http/struct.RawStr.html -->
-<!--  -->
-
 ### Multiple Segments
 
 You can also match against multiple segments by using `<param..>` in a route

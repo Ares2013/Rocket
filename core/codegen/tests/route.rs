@@ -148,3 +148,151 @@ mod scopes {
         rocket::ignite().mount("/", rocket::routes![hello, world])
     }
 }
+
+use rocket::form::Contextual;
+
+#[derive(Default, Debug, PartialEq, FromForm)]
+struct Filtered<'r> {
+    bird: Option<&'r str>,
+    color: Option<&'r str>,
+    cat: Option<&'r str>,
+    rest: Option<&'r str>,
+}
+
+#[get("/?bird=1&color=blue&<bird>&<color>&cat=bob&<rest..>")]
+fn filtered_raw_query(bird: usize, color: &str, rest: Contextual<'_, Filtered<'_>>) -> String {
+    assert_ne!(bird, 1);
+    assert_ne!(color, "blue");
+    assert_eq!(rest.value.unwrap(), Filtered::default());
+
+    format!("{} - {}", bird, color)
+}
+
+#[test]
+fn test_filtered_raw_query() {
+    let rocket = rocket::ignite().mount("/", routes![filtered_raw_query]);
+    let client = Client::untracked(rocket).unwrap();
+
+    #[track_caller]
+    fn run(client: &Client, birds: &[&str], colors: &[&str], cats: &[&str]) -> (Status, String) {
+        let join = |slice: &[&str], name: &str| slice.iter()
+            .map(|v| format!("{}={}", name, v))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        let q = format!("{}&{}&{}",
+            join(birds, "bird"),
+            join(colors, "color"),
+            join(cats, "cat"));
+
+        let response = client.get(format!("/?{}", q)).dispatch();
+        let status = response.status();
+        let body = response.into_string().unwrap();
+
+        (status, body)
+    }
+
+    let birds = &["2", "3"];
+    let colors = &["red", "blue", "green"];
+    let cats = &["bob", "bob"];
+    assert_eq!(run(&client, birds, colors, cats).0, Status::NotFound);
+
+    let birds = &["2", "1", "3"];
+    let colors = &["red", "green"];
+    let cats = &["bob", "bob"];
+    assert_eq!(run(&client, birds, colors, cats).0, Status::NotFound);
+
+    let birds = &["2", "1", "3"];
+    let colors = &["red", "blue", "green"];
+    let cats = &[];
+    assert_eq!(run(&client, birds, colors, cats).0, Status::NotFound);
+
+    let birds = &["2", "1", "3"];
+    let colors = &["red", "blue", "green"];
+    let cats = &["bob", "bob"];
+    assert_eq!(run(&client, birds, colors, cats).1, "2 - red");
+
+    let birds = &["1", "2", "1", "3"];
+    let colors = &["blue", "red", "blue", "green"];
+    let cats = &["bob"];
+    assert_eq!(run(&client, birds, colors, cats).1, "2 - red");
+
+    let birds = &["5", "1"];
+    let colors = &["blue", "orange", "red", "blue", "green"];
+    let cats = &["bob"];
+    assert_eq!(run(&client, birds, colors, cats).1, "5 - orange");
+}
+
+#[derive(Debug, PartialEq, FromForm)]
+struct Dog<'r> {
+    name: &'r str,
+    age: usize
+}
+
+#[derive(Debug, PartialEq, FromForm)]
+struct Q<'r> {
+    dog: Dog<'r>
+}
+
+#[get("/?<color>&color=red&<q..>")]
+fn query_collection(color: Vec<&str>, q: Q<'_>) -> String {
+    format!("{} - {} - {}", color.join("&"), q.dog.name, q.dog.age)
+}
+
+#[get("/?<color>&color=red&<dog>")]
+fn query_collection_2(color: Vec<&str>, dog: Dog<'_>) -> String {
+    format!("{} - {} - {}", color.join("&"), dog.name, dog.age)
+}
+
+#[test]
+fn test_query_collection() {
+    #[track_caller]
+    fn run(client: &Client, colors: &[&str], dog: &[&str]) -> (Status, String) {
+        let join = |slice: &[&str], prefix: &str| slice.iter()
+            .map(|v| format!("{}{}", prefix, v))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        let q = format!("{}&{}", join(colors, "color="), join(dog, "dog."));
+        let response = client.get(format!("/?{}", q)).dispatch();
+        (response.status(), response.into_string().unwrap())
+    }
+
+    fn run_tests(rocket: rocket::Rocket) {
+        let client = Client::untracked(rocket).unwrap();
+
+        let colors = &["blue", "green"];
+        let dog = &["name=Fido", "age=10"];
+        assert_eq!(run(&client, colors, dog).0, Status::NotFound);
+
+        let colors = &["red"];
+        let dog = &["name=Fido"];
+        assert_eq!(run(&client, colors, dog).0, Status::NotFound);
+
+        let colors = &["red"];
+        let dog = &["name=Fido", "age=2"];
+        assert_eq!(run(&client, colors, dog).1, " - Fido - 2");
+
+        let colors = &["red", "blue", "green"];
+        let dog = &["name=Fido", "age=10"];
+        assert_eq!(run(&client, colors, dog).1, "blue&green - Fido - 10");
+
+        let colors = &["red", "blue", "green"];
+        let dog = &["name=Fido", "age=10", "toy=yes"];
+        assert_eq!(run(&client, colors, dog).1, "blue&green - Fido - 10");
+
+        let colors = &["blue", "red", "blue"];
+        let dog = &["name=Fido", "age=10"];
+        assert_eq!(run(&client, colors, dog).1, "blue&blue - Fido - 10");
+
+        let colors = &["blue", "green", "red", "blue"];
+        let dog = &["name=Max+Fido", "age=10"];
+        assert_eq!(run(&client, colors, dog).1, "blue&green&blue - Max Fido - 10");
+    }
+
+    let rocket = rocket::ignite().mount("/", routes![query_collection]);
+    run_tests(rocket);
+
+    let rocket = rocket::ignite().mount("/", routes![query_collection_2]);
+    run_tests(rocket);
+}

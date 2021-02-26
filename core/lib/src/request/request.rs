@@ -11,7 +11,7 @@ use atomic::{Atomic, Ordering};
 
 // use crate::request::{FromParam, FromSegments, FromRequest, Outcome};
 use crate::request::{FromParam, FromSegments, FromRequest, Outcome};
-use crate::form::{self, ValueField, FromFormField};
+use crate::form::{self, ValueField, FromForm};
 
 use crate::{Rocket, Config, Shutdown, Route};
 use crate::http::{hyper, uri::{Origin, Segments}, uncased::UncasedStr};
@@ -545,18 +545,22 @@ impl<'r> Request<'r> {
     /// request, `f` is called to produce the value which is subsequently
     /// returned.
     ///
+    /// Different values of the same type _cannot_ be cached without using a
+    /// proxy, wrapper type. To avoid the need to write these manually, or for
+    /// libraries wishing to store values of public types, use the
+    /// [`local_cache!`] macro to generate a locally anonymous wrapper type,
+    /// store, and retrieve the wrapped value from request-local cache.
+    ///
     /// # Example
     ///
     /// ```rust
-    /// # use rocket::http::Method;
-    /// # use rocket::Request;
-    /// # type User = ();
-    /// fn current_user(request: &Request) -> User {
-    ///     // Validate request for a given user, load from database, etc.
-    /// }
+    /// # rocket::Request::example(rocket::http::Method::Get, "/uri", |request| {
+    /// // The first store into local cache for a given type wins.
+    /// let value = request.local_cache(|| "hello");
+    /// assert_eq!(*request.local_cache(|| "hello"), "hello");
     ///
-    /// # Request::example(Method::Get, "/uri", |request| {
-    /// let user = request.local_cache(|| current_user(request));
+    /// // The following return the cached, previously stored value for the type.
+    /// assert_eq!(*request.local_cache(|| "goodbye"), "hello");
     /// # });
     /// ```
     pub fn local_cache<T, F>(&self, f: F) -> &T
@@ -696,8 +700,13 @@ impl<'r> Request<'r> {
     /// value. Key matching is performed case-sensitively. If there are multiple
     /// pairs with key `key`, the _first_ one is returned.
     ///
-    /// This method exists only to be used by manual routing. To retrieve
-    /// query values from a request, use Rocket's code generation facilities.
+    /// # Warning
+    ///
+    /// This method exists _only_ to be used by manual routing and should
+    /// _never_ be used in a regular Rocket application. It is much more
+    /// expensive to use this method than to retrieve query parameters via
+    /// Rocket's codegen. To retrieve query values from a request, _always_
+    /// prefer to use Rocket's code generation facilities.
     ///
     /// # Error
     ///
@@ -707,32 +716,45 @@ impl<'r> Request<'r> {
     /// # Example
     ///
     /// ```rust
-    /// # use rocket::{Request, http::Method};
-    /// use std::path::PathBuf;
-    /// use rocket::http::uri::Origin;
+    /// # use rocket::{Request, http::Method, form::FromForm};
+    /// # fn with_request<F: Fn(&mut Request<'_>)>(uri: &str, f: F) {
+    /// #     Request::example(Method::Get, uri, f);
+    /// # }
+    /// with_request("/?a=apple&z=zebra&a=aardvark", |req| {
+    ///     assert_eq!(req.query_value::<&str>("a").unwrap(), Ok("apple"));
+    ///     assert_eq!(req.query_value::<&str>("z").unwrap(), Ok("zebra"));
+    ///     assert_eq!(req.query_value::<&str>("b"), None);
     ///
-    /// # Request::example(Method::Get, "/", |req| {
-    /// fn value<'s>(req: &'s mut Request, uri: &'static str, key: &str) -> &'s str {
-    ///     req.set_uri(Origin::parse(uri).unwrap());
+    ///     let a_seq = req.query_value::<Vec<&str>>("a").unwrap();
+    ///     assert_eq!(a_seq.unwrap(), ["apple", "aardvark"]);
+    /// });
     ///
-    ///     req.query_value(key)
-    ///         .and_then(|r| r.ok())
-    ///         .unwrap_or("n/a".into())
+    /// #[derive(Debug, PartialEq, FromForm)]
+    /// struct Dog<'r> {
+    ///     name: &'r str,
+    ///     age: usize
     /// }
     ///
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "a"), "apple");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "z"), "zebra");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "A"), "n/a");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra&a=argon", "a"), "apple");
-    /// assert_eq!(value(req, "/?a=1&a=2&a=3&b=4", "a"), "1");
-    /// assert_eq!(value(req, "/?a=apple&z=zebra", "apple"), "n/a");
-    /// # });
+    /// with_request("/?dog.name=Max+Fido&dog.age=3", |req| {
+    ///     let dog = req.query_value::<Dog>("dog").unwrap().unwrap();
+    ///     assert_eq!(dog, Dog { name: "Max Fido", age: 3 });
+    /// });
     /// ```
     #[inline]
-    pub fn query_value<'a, T>(&'a self, name: &str) -> Option<Result<T, form::Errors<'a>>>
-        where T: FromFormField<'a>
+    pub fn query_value<'a, T>(&'a self, name: &str) -> Option<form::Result<'a, T>>
+        where T: FromForm<'a>
     {
-        self.query_fields().find(|f| f.name == name).map(T::from_value)
+        if self.query_fields().find(|f| f.name == name).is_none() {
+            return None;
+        }
+
+        let mut ctxt = T::init(form::Options::Lenient);
+
+        self.query_fields()
+            .filter(|f| f.name == name)
+            .for_each(|f| T::push_value(&mut ctxt, f.shift()));
+
+        Some(T::finalize(ctxt))
     }
 }
 

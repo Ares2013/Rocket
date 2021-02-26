@@ -1,14 +1,31 @@
 //! Contains types that set the status code and corresponding headers of a
 //! response.
 //!
-//! These types are designed to make it easier to respond correctly with a given
-//! status code. Each type takes in the minimum number of parameters required to
-//! construct a proper response with that status code. Some types take in
+//! # Responding
+//!
+//! Types in this module designed to make it easier to construct correct
+//! responses with a given status code. Each type takes in the minimum number of
+//! parameters required to construct a correct response. Some types take in
 //! responders; when they do, the responder finalizes the response by writing
 //! out additional headers and, importantly, the body of the response.
 //!
+//!
+//!
 //! The [`Custom`] type allows responding with _any_ `Status` but _does not_
-//! ensure that all of the required headers are present.
+//! ensure that all of the required headers are present. As a convenience,
+//! `(Status, R)` where `R: Responder` is _also_ a `Responder`, identical to
+//! `Custom`.
+//!
+//! ```rust
+//! # extern crate rocket;
+//! # use rocket::get;
+//! use rocket::http::Status;
+//!
+//! #[get("/")]
+//! fn index() -> (Status, &'static str) {
+//!     (Status::NotFound, "Hey, there's no index!")
+//! }
+//! ```
 
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;

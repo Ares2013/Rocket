@@ -34,10 +34,13 @@ pub use serde_json::{json_internal, json_internal_vec};
 ///
 /// ## Receiving JSON
 ///
-/// If you're receiving JSON data, simply add a `data` parameter to your route
-/// arguments and ensure the type of the parameter is a `Json<T>`, where `T` is
-/// some type you'd like to parse from JSON. `T` must implement [`Deserialize`]
-/// from [`serde`]. The data is parsed from the HTTP request body.
+/// `Json` is both a data guard and a form guard.
+///
+/// ### Data Guard
+///
+/// To parse request body data as JSON , add a `data` route argument with a
+/// target type of `Json<T>`, where `T` is some type you'd like to parse from
+/// JSON. `T` must implement [`serde::Deserialize`].
 ///
 /// ```rust
 /// # #[macro_use] extern crate rocket;
@@ -45,7 +48,7 @@ pub use serde_json::{json_internal, json_internal_vec};
 /// # type User = usize;
 /// use rocket_contrib::json::Json;
 ///
-/// #[post("/users", format = "json", data = "<user>")]
+/// #[post("/user", format = "json", data = "<user>")]
 /// fn new_user(user: Json<User>) {
 ///     /* ... */
 /// }
@@ -55,6 +58,30 @@ pub use serde_json::{json_internal, json_internal_vec};
 /// Using `format = json` means that any request that doesn't specify
 /// "application/json" as its `Content-Type` header value will not be routed to
 /// the handler.
+///
+/// ### Form Guard
+///
+/// `Json<T>`, as a form guard, accepts value and data fields and parses the
+/// data as a `T`. Simple use `Json<T>`:
+///
+/// ```rust
+/// # #[macro_use] extern crate rocket;
+/// # extern crate rocket_contrib;
+/// # type Metadata = usize;
+/// use rocket::form::{Form, FromForm};
+/// use rocket_contrib::json::Json;
+///
+/// #[derive(FromForm)]
+/// struct User<'r> {
+///     name: &'r str,
+///     metadata: Json<Metadata>
+/// }
+///
+/// #[post("/user", data = "<form>")]
+/// fn new_user(form: Form<User<'_>>) {
+///     /* ... */
+/// }
+/// ```
 ///
 /// ## Sending JSON
 ///
