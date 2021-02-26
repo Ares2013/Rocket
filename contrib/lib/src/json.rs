@@ -417,3 +417,5 @@ macro_rules! json {
         $crate::json::JsonValue($crate::json::json_internal!($($json)+))
     };
 }
+
+pub use json;
