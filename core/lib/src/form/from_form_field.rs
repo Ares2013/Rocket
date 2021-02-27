@@ -66,8 +66,8 @@ use crate::form::prelude::*;
 ///
 ///     A value is validated successfully as `true` if the the form value is one
 ///     of `"on"`, `"yes"`, or `"true"` and `false` if the value is one of
-///     `"off"`, `"no"`, or `"false"`. Only accepts form _values_, not binary
-///     data.
+///     `"off"`, `"no"`, or `"false"`. Defaults to `false` otherwise. Only
+///     accepts form _values_, not binary data.
 ///
 ///   * **`&str`, `String`**
 ///

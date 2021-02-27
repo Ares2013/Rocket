@@ -48,3 +48,8 @@ macro_rules! assert_form_parses_ok {
         rocket::form::Form::<$T>::parse($form).expect("form to parse");
     )*);
 }
+
+pub fn client(routes: Vec<rocket::Route>) -> rocket::local::blocking::Client {
+    let rocket = rocket::custom(rocket::Config::debug_default()).mount("/", routes);
+    rocket::local::blocking::Client::tracked(rocket).unwrap()
+}

@@ -257,118 +257,6 @@ of a route given its properties.
 | no          | fully dynamic | -2   | `/<hi>?<world>`     |
 | no          | none          | -1   | `/<hi>`             |
 
-## Query Strings
-
-Query segments can be declared static or dynamic in much the same way as path
-segments:
-
-```rust
-# #[macro_use] extern crate rocket;
-# fn main() {}
-
-#[get("/hello?wave&<name>")]
-fn hello(name: &str) -> String {
-    format!("Hello, {}!", name)
-}
-```
-
-The `hello` route above matches any `GET` request to `/hello` that has at least
-one query key of `name` and a query segment of `wave` in any order, ignoring any
-extra query segments. The value of the `name` query parameter is used as the
-value of the `name` function argument. For instance, a request to
-`/hello?wave&name=John` would return `Hello, John!`. Other requests that would
-result in the same response include:
-
-  * `/hello?name=John&wave` (reordered)
-  * `/hello?name=John&wave&id=123` (extra segments)
-  * `/hello?id=123&name=John&wave` (reordered, extra segments)
-  * `/hello?name=Bob&name=John&wave` (last value taken)
-
-Any number of dynamic query segments are allowed. A query segment can be of any
-type, including your own, as long as the type implements the [`FromFormValue`]
-trait.
-
-[`FromFormValue`]: @api/rocket/request/trait.FromFormValue.html
-
-### Optional Parameters
-
-Query parameters are allowed to be _missing_. As long as a request's query
-string contains all of the static components of a route's query string, the
-request will be routed to that route. This allows for optional parameters,
-validating even when a parameter is missing.
-
-To achieve this, use `Option<T>` as the parameter type. Whenever the query
-parameter is missing in a request, `None` will be provided as the value.  A
-route using `Option<T>` looks as follows:
-
-```rust
-# #[macro_use] extern crate rocket;
-# fn main() {}
-
-#[get("/hello?wave&<name>")]
-fn hello(name: Option<String>) -> String {
-    name.map(|name| format!("Hi, {}!", name))
-        .unwrap_or_else(|| "Hello!".into())
-}
-```
-
-Any `GET` request with a path of `/hello` and a `wave` query segment will be
-routed to this route. If a `name=value` query segment is present, the route
-returns the string `"Hi, value!"`. If no `name` query segment is present, the
-route returns `"Hello!"`.
-
-Just like a parameter of type `Option<T>` will have the value `None` if the
-parameter is missing from a query, a parameter of type `bool` will have the
-value `false` if it is missing. The default value for a missing parameter can be
-customized for your own types that implement `FromFormValue` by implementing
-[`FromFormValue::default()`].
-
-[`FromFormValue::default()`]: @api/rocket/request/trait.FromFormValue.html#method.default
-
-### Multiple Segments
-
-As with paths, you can also match against multiple segments in a query by using
-`<param..>`. The type of such parameters, known as _query guards_, must
-implement the [`FromForm`] trait. Query guards must be the final component of a
-query: any text after a query parameter will result in a compile-time error. The
-[Forms](#forms) section explains deriving [`FromForm`] in detail.
-
-```rust
-# #[macro_use] extern crate rocket;
-# fn main() {}
-
-use rocket::form::Form;
-
-#[derive(FromForm)]
-struct User {
-    name: String,
-    account: usize,
-}
-
-#[get("/item?<id>&<user..>")]
-fn item(id: usize, user: User) { /* ... */ }
-```
-
-For a request to `/item?id=100&name=sandal&account=400`, the `item` route above
-sets `id` to `100` and `user` to `User { name: "sandal", account: 400 }`. To
-catch forms that fail to validate, use a type of `Option` or `Result`:
-
-```rust
-# #[macro_use] extern crate rocket;
-# fn main() {}
-
-# use rocket::form::Form;
-# #[derive(FromForm)] struct User { name: String, account: usize, }
-
-#[get("/item?<id>&<user..>")]
-fn item(id: usize, user: Option<User>) { /* ... */ }
-```
-
-For more query handling examples, see [the `query_params`
-example](@example/query_params).
-
-[`FromQuery`]: @api/rocket/request/trait.FromQuery.html
-
 ## Request Guards
 
 Request guards are one of Rocket's most powerful instruments. As the name might
@@ -754,8 +642,43 @@ async fn upload(mut file: TempFile<'_>) -> std::io::Result<()> {
 
 [`TempFile`]: @api/rocket/data/struct.TempFile.html
 
+### Streaming
 
-### Forms
+Sometimes you just want to handle incoming data directly. For example, you might
+want to stream the incoming data to some sink. Rocket makes this as simple as
+possible via the [`Data`](@api/rocket/data/struct.Data.html) type:
+
+```rust
+# #[macro_use] extern crate rocket;
+
+use rocket::tokio;
+
+use rocket::data::{Data, ToByteUnit};
+
+#[post("/debug", data = "<data>")]
+async fn debug(data: Data) -> std::io::Result<()> {
+    // Stream at most 512KiB all of the body data to stdout.
+    data.open(512.kibibytes())
+        .stream_to(tokio::io::stdout())
+        .await?;
+
+    Ok(())
+}
+```
+
+The route above accepts any `POST` request to the `/debug` path. At most 512KiB
+of the incoming is streamed out to `stdout`. If the upload fails, an error
+response is returned. The handler above is complete. It really is that simple!
+
+! note: Rocket requires setting limits when reading incoming data.
+
+  To aid in preventing DoS attacks, Rocket requires you to specify, as a
+  [`ByteUnit`](@api/rocket/data/struct.ByteUnit.html), the amount of data you're
+  willing to accept from the client when `open`ing a data stream. The
+  [`ToByteUnit`](@api/rocket/data/trait.ToByteUnit.html) trait makes specifying
+  such a value as idiomatic as `128.kibibytes()`.
+
+## Forms
 
 Forms are one of the most common types of data handled in web applications, and
 Rocket makes handling them easy. Say your application is processing a form
@@ -799,11 +722,10 @@ forward or failure can be caught by using the `Option` and `Result` types:
 fn new(task: Option<Form<Task>>) { /* .. */ }
 ```
 
-[`Form`]: @api/rocket/request/struct.Form.html
-[`FromForm`]: @api/rocket/request/trait.FromForm.html
-[`FromFormValue`]: @api/rocket/request/trait.FromFormValue.html
+[`Form`]: @api/rocket/form/struct.Form.html
+[`FromForm`]: @api/rocket/form/trait.FromForm.html
 
-#### Strict Parsing
+### Strict Parsing
 
 Rocket's `FromForm` parsing is _lenient_ by default: a `Form<T>` will parse
 successfully from an incoming form even if it contains extra or duplicate
@@ -835,7 +757,7 @@ fn new(task: Form<Strict<Task>>) { /* .. */ }
 
 [`Form<Strict<T>>`]: @api/rocket/form/struct.Strict.html
 
-#### Field Renaming
+### Field Renaming
 
 By default, Rocket matches the name of an incoming form field to the name of a
 structure field. While this behavior is typical, it may also be desired to use
@@ -862,7 +784,7 @@ struct External {
 Rocket will then match the form field named `first-Name` to the structure field
 named `first_name`.
 
-#### Ad-Hoc Validation
+### Ad-Hoc Validation
 
 Fields of forms can be easily ad-hoc validated via the `#[field(validate)]`
 attribute. As an example, consider a form field `age: u16` which we'd like to
@@ -934,7 +856,7 @@ fn luhn<'v, S: AsRef<str>>(field: S) -> rocket::form::Result<'v, ()> {
 }
 ```
 
-#### Defaults
+### Defaults
 
 The [`FromForm`] trait allows types to specify a default value if one isn't
 provided in a submitted form. This includes types such as `bool`, useful for
@@ -959,7 +881,7 @@ struct MyForm<'v> {
 
 [`Errors<'_>`]: @api/rocket/forms/struct.Errors.html
 
-#### Collections
+### Collections
 
 Rocket's form support allows your application to express _any_ structure with
 _any_ level of nesting and collection, eclipsing the expressivity offered by any
@@ -984,10 +906,10 @@ for structures that need more than one value to allow indexing.
 
 ! note: A `.` after a `[]` is optional.
 
-  The form field name `a[b]c` is exactly equivalent to `a[b]c`. Likewise, the
+  The form field name `a[b]c` is exactly equivalent to `a[b].c`. Likewise, the
   form field name `.a` is equivalent to `a`.
 
-#### Nesting
+### Nesting
 
 Form structs can be nested:
 
@@ -1082,7 +1004,7 @@ MyForm {
 
 Any level of nesting is allowed.
 
-#### Vectors
+### Vectors
 
 A form can also contain sequences:
 
@@ -1145,10 +1067,10 @@ You might be surprised to see the last example,
 `"numbers=1&numbers=2&numbers=3"`, in the first list. This is equivalent to the
 previous examples as the "key" seen by the `Vec` (everything after `numbers`) is
 empty. Thus, `Vec` pushes to a new `usize` for every field. `usize`, like all
-types that implement `FromFormValue`, discard duplicate and extra fields when
+types that implement `FromFormField`, discard duplicate and extra fields when
 parsed leniently, keeping only the _first_ field.
 
-#### Nesting in Vectors
+### Nesting in Vectors
 
 Any `FromForm` type can appear in a sequence:
 
@@ -1202,7 +1124,7 @@ MyForm {
 # };
 ```
 
-#### Nested Vectors
+### Nested Vectors
 
 Since vectors are `FromForm` themselves, they can appear inside of vectors:
 
@@ -1232,7 +1154,7 @@ The rules are exactly the same.
 # };
 ```
 
-#### Maps
+### Maps
 
 A form can also contain maps:
 
@@ -1378,7 +1300,7 @@ submitted:
   * `m[k:$key].age` - usize
   * `m[$key].wags` or `m[v:$key].wags`  - boolean
 
-! note: The synax `v:$key` also exists.
+! note: The syntax `v:$key` also exists.
 
   The shorthand `m[$key]` is equivalent to `m[v:$key]`.
 
@@ -1432,7 +1354,7 @@ MyForm {
 # };
 ```
 
-#### Arbitrary Collections
+### Arbitrary Collections
 
 _Any_ collection can be expressed with any level of arbitrary nesting, maps, and
 sequences. Consider the extravagently contrived type:
@@ -1521,65 +1443,189 @@ map! {
 # };
 ```
 
-#### Context
+### Context
 
-The [`Context`] type acts as a proxy for any form type, recording all of the
+The [`Contextual`] type acts as a proxy for any form type, recording all of the
 submitted form values and produced errors and associating them with their
-corresponding field name. `Context` is particularly useful to render a form with
-previously submitted values and render errors associated with a form input.
+corresponding field name. `Contextual` is particularly useful to render a form
+with previously submitted values and render errors associated with a form input.
 
-To retrieve the context for a form, use `Result<T, Context<'_>>` as a data
-guard, where `T` implements `FromForm`:
+To retrieve the context for a form, use `Form<Contextual<'_, T>>` as a data
+guard, where `T` implements `FromForm`. The `context` field contains the form's
+[`Context`]:
 
-<!-- ```rust -->
-<!-- # use rocket::post; -->
-<!-- # type T = String; -->
-<!--  -->
-<!-- use rocket::form::Context; -->
-<!--  -->
-<!-- #[post("/submit", data = "<form>")] -->
-<!-- fn submit(form: Result<T, Context<'_>>) -> String { -->
-<!--     format!("form context: {:?}", form) -->
-<!-- } -->
-<!-- ``` -->
+```rust
+# use rocket::post;
+# type T = String;
 
+use rocket::form::{Form, Contextual};
+
+#[post("/submit", data = "<form>")]
+fn submit(form: Form<Contextual<'_, T>>) {
+    if let Some(ref value) = form.value {
+        // The form parsed successfully. `value` is the `T`.
+    }
+
+    // In all cases, `form.context` contains the `Context`.
+    // We can retrieve raw field values and errors.
+    let raw_id_value = form.context.value("id");
+    let id_errors = form.context.errors("id");
+}
+```
+
+`Context` serializes as a map, so it can be rendered in templates that require
+`Serialize` types. See
+[`Context`](@api/rocket/form/struct.Context.html#Serialization) for details
+about its serialization format. The [forms example], too, makes use of form
+contexts, as well as every other forms feature.
+
+[`Contextual`]: @api/rocket/form/struct.Contextual.html
 [`Context`]: @api/rocket/form/struct.Context.html
+[forms example]: @example/forms
 
-### Streaming
+## Query Strings
 
-Sometimes you just want to handle incoming data directly. For example, you might
-want to stream the incoming data to some sink. Rocket makes this as simple as
-possible via the [`Data`](@api/rocket/data/struct.Data.html) type:
+Query strings are URL-encoded forms that appear in the URL of a request. Query
+parameters are declared like path parameters but otherwise handled like regular
+URL-encoded form fields. The table below summarizes the analogy:
+
+| Path Synax  | Query Syntax | Path Type Bound  | Query Type Bound |
+|-------------|--------------|------------------|------------------|
+| `<param>`   | `<param>`    | [`FromParam`]    | [`FromForm`]     |
+| `<param..>` | `<param..>`  | [`FromSegments`] | [`FromForm`]     |
+| `static`    | `static`     | N/A              | N/A              |
+
+Because dynamic parameters are form types, they can be single values,
+collections, nested collections, or anything in between, just like any other
+form field.
+
+### Static Parameters
+
+A request matches a route _iff_ its query string contains all of the static
+parameters in the route's query string. A route with a static parameter `param`
+(any UTF-8 text string) in a query will only match requests with that exact path
+segment in its query string.
+
+! note: This is truly an _iff_!
+
+  Only the static parameters in query route string affect routing. Dynamic
+  parameters are allowed to be missing by default.
+
+
+For example, the route below will match requests with path `/` and _at least_
+the query segments `hello` and `cat=♥`:
+
+```rust,ignore
+# FIXME: https://github.com/rust-lang/rust/issues/82583
+# #[macro_use] extern crate rocket;
+
+#[get("/?hello&cat=♥")]
+fn cats() -> &'static str {
+    "Hello, kittens!"
+}
+
+// The following GET requests match `cats`.
+# let status = rocket_guide_tests::client(routes![cats]).get(
+"/?cat%3D%E2%99%A5%26hello"
+# ).dispatch().status();
+# assert_eq!(status, rocket::http::Status::Ok);
+# let status = rocket_guide_tests::client(routes![cats]).get(
+"/?hello&cat%3D%E2%99%A5%26"
+# ).dispatch().status();
+# assert_eq!(status, rocket::http::Status::Ok);
+# let status = rocket_guide_tests::client(routes![cats]).get(
+"/?dogs=amazing&hello&there&cat%3D%E2%99%A5%26"
+# ).dispatch().status();
+# assert_eq!(status, rocket::http::Status::Ok);
+```
+
+### Dynamic Parameters
+
+A single dynamic parameter of `<param>` acts identically to a form field
+declared as `param`. In particular, Rocket will expect the query form to contain
+a field with key `param` and push the shifted field to the `param` type. As with
+forms, default values are used when parsing fails. The example below illustrates
+this with a single value `name`, a collection `color`, a nested form `person`,
+and an `other` value that will default to `None`:
 
 ```rust
 # #[macro_use] extern crate rocket;
 
-use rocket::tokio;
-
-use rocket::data::{Data, ToByteUnit};
-
-#[post("/debug", data = "<data>")]
-async fn debug(data: Data) -> std::io::Result<()> {
-    // Stream at most 512KiB all of the body data to stdout.
-    data.open(512.kibibytes())
-        .stream_to(tokio::io::stdout())
-        .await?;
-
-    Ok(())
+#[derive(Debug, PartialEq, FromFormField)]
+enum Color {
+    Red,
+    Blue,
+    Green
 }
+
+#[derive(Debug, PartialEq, FromForm)]
+struct Pet<'r> {
+  name: &'r str,
+  age: usize,
+}
+
+#[derive(Debug, PartialEq, FromForm)]
+struct Person<'r> {
+  pet: Pet<'r>,
+}
+
+#[get("/?<name>&<color>&<person>&<other>")]
+fn hello(name: &str, color: Vec<Color>, person: Person<'_>, other: Option<usize>) {
+    assert_eq!(name, "George");
+    assert_eq!(color, [Color::Red, Color::Green, Color::Green, Color::Blue]);
+    assert_eq!(other, None);
+    assert_eq!(person, Person {
+      pet: Pet { name: "Fi Fo Alex", age: 1 }
+    });
+}
+
+// A request with these query segments matches as above.
+# rocket_guide_tests::client(routes![hello]).get("/?\
+color=reg&\
+color=green&\
+person.pet.name=Fi+Fo+Alex&\
+color=green&\
+person.pet.age=1\
+color=blue&\
+extra=yes\
+# ").dispatch();
 ```
 
-The route above accepts any `POST` request to the `/debug` path. At most 512KiB
-of the incoming is streamed out to `stdout`. If the upload fails, an error
-response is returned. The handler above is complete. It really is that simple!
+Note that, like forms, parsing is field-ordering insensitive and lenient by
+default.
 
-! note: Rocket requires setting limits when reading incoming data.
+### Trailing Parameter
 
-  To aid in preventing DoS attacks, Rocket requires you to specify, as a
-  [`ByteUnit`](@api/rocket/data/struct.ByteUnit.html), the amount of data you're
-  willing to accept from the client when `open`ing a data stream. The
-  [`ToByteUnit`](@api/rocket/data/trait.ToByteUnit.html) trait makes specifying
-  such a value as idiomatic as `128.kibibytes()`.
+A trailing dynamic parameter of `<param..>` collects all of the query segments
+that don't otherwise match a declared static or dynamic parameter. In other
+words, the otherwise unmatched segments are pushed, unshifted, to the
+`<param..>` type:
+
+```rust
+# #[macro_use] extern crate rocket;
+
+use rocket::form::Form;
+
+#[derive(FromForm)]
+struct User<'r> {
+    name: &'r str,
+    active: bool,
+}
+
+#[get("/?hello&<id>&<user..>")]
+fn user(id: usize, user: User<'_>) {
+    assert_eq!(id, 1337);
+    assert_eq!(user.name, "Bob Smith");
+    assert_eq!(user.active, true);
+}
+
+// A request with these query segments matches as above.
+# rocket_guide_tests::client(routes![user]).get("/?\
+name=Bob+Smith&\
+id=1337\
+active=yes\
+# ").dispatch();
+```
 
 ## Error Catchers
 

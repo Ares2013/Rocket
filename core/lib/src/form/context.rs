@@ -56,8 +56,8 @@ impl<'v> Context<'v> {
         self.errors(name).next().is_some()
     }
 
-    pub fn errors<'a, N>(&'a self, name: &'a N) -> impl Iterator<Item = &Error<'v>>
-        where N: AsRef<Name>
+    pub fn errors<'a, N>(&'a self, name: &'a N) -> impl Iterator<Item = &Error<'v>> + 'a
+        where N: AsRef<Name> + ?Sized
     {
         let name = name.as_ref();
         name.prefixes()
